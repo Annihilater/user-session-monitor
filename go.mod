@@ -1,4 +1,4 @@
-module github.com/ziji/user-session-monitor
+module github.com/Annihilater/user-session-monitor
 
 go 1.21
 
