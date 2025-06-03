@@ -8,60 +8,90 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 	"time"
 
-	"github.com/ziji/user-session-monitor/internal/feishu"
+	"github.com/Annihilater/user-session-monitor/internal/feishu"
 )
 
 var (
 	// 登录事件匹配模式
 	// 匹配示例：
-	// sshd[12345]: Accepted password for userA from 192.168.1.100 port 22 ssh2
-	// sshd[12345]: Accepted publickey for userB from 10.0.0.100 port 22 ssh2
-	loginPattern = regexp.MustCompile(`(?m)sshd\[\d+\]: Accepted (?:password|publickey) for (\w+) from ([\d\.]+)`)
+	// sshd[0000000]: Accepted publickey for root from 192.168.1.1 port 55030 ssh2: RSA SHA256:xxxxxxxxxxx
+	// 匹配组说明：
+	// (\w+) - 第一个组：用户名
+	// ([\d\.]+) - 第二个组：IP地址
+	// (\d+) - 第三个组：端口号
+	// 支持的认证方式：password（密码认证）和 publickey（密钥认证）
+	loginPattern = regexp.MustCompile(`(?m)sshd\[\d+\]: Accepted (?:password|publickey) for (\w+) from ([\d\.]+) port (\d+)`)
 
 	// 登出事件匹配模式列表
+	// 由于登出事件有多种不同的日志格式，这里使用多个正则表达式进行匹配
 	logoutPatterns = []*regexp.Regexp{
 		// 1. 用户主动断开连接场景
-		// 匹配示例：sshd[12345]: Received disconnect from 192.168.1.100 port 22:11: disconnected by user
-		// 常见于：
-		// - 使用 exit 命令
-		// - 使用 logout 命令
-		// - 按 Ctrl + D
-		regexp.MustCompile(`(?m)sshd\[\d+\]: Received disconnect from ([\d\.]+) port \d+:11: disconnected by user`),
+		// 匹配示例：sshd[0000000]: Received disconnect from 192.168.1.1 port 55030:11: disconnected by user
+		// 匹配组说明：
+		// ([\d\.]+) - 第一个组：IP地址
+		// (\d+) - 第二个组：端口号
+		// 常见于以下情况：
+		// - 用户执行 exit 命令
+		// - 用户执行 logout 命令
+		// - 用户按 Ctrl + D
+		// - SSH 客户端正常关闭
+		regexp.MustCompile(`(?m)sshd\[\d+\]: Received disconnect from ([\d\.]+) port (\d+):11: disconnected by user`),
 
 		// 2. 用户断开连接场景（带用户名）
-		// 匹配示例：sshd[12345]: User userA from 192.168.1.100 disconnected
-		// 常见于：
-		// - 客户端正常关闭 SSH 连接
-		// - 网络正常断开
-		regexp.MustCompile(`(?m)sshd\[\d+\]: User (\w+) from ([\d\.]+) disconnected`),
+		// 匹配示例：sshd[0000000]: Disconnected from user root 192.168.1.1 port 55030
+		// 匹配组说明：
+		// (\w+) - 第一个组：用户名
+		// ([\d\.]+) - 第二个组：IP地址
+		// (\d+) - 第三个组：端口号
+		// 常见于以下情况：
+		// - SSH 会话正常结束
+		// - 客户端网络断开
+		// - 服务器端会话超时
+		regexp.MustCompile(`(?m)sshd\[\d+\]: Disconnected from user (\w+) ([\d\.]+) port (\d+)`),
 
-		// 3. 认证用户关闭连接场景
-		// 匹配示例：sshd[12345]: Connection closed by authenticating user userA 192.168.1.100
-		// 常见于：
-		// - SSH 客户端异常退出
-		// - 网络异常断开
-		// - 客户端超时断开
-		regexp.MustCompile(`(?m)sshd\[\d+\]: Connection closed by authenticating user (\w+) ([\d\.]+)`),
-
-		// 4. PAM 会话关闭场景
-		// 匹配示例：sshd[12345]: pam_unix(sshd:session): session closed for user userA
-		// 常见于：
+		// 3. PAM 会话关闭场景
+		// 匹配示例：sshd[0000000]: pam_unix(sshd:session): session closed for user root
+		// 匹配组说明：
+		// (\w+) - 第一个组：用户名
+		// 常见于以下情况：
 		// - 系统强制关闭会话
-		// - 会话超时自动登出
+		// - PAM 会话超时
 		// - 系统关机或重启
+		// 注意：此场景下无法直接获取 IP 和端口信息，需要从之前的登录记录中查找
 		regexp.MustCompile(`(?m)sshd\[\d+\]: pam_unix\(sshd:session\): session closed for user (\w+)`),
 	}
 
 	// 用于存储最近的登录记录，用于补充登出信息
-	// key: username, value: {ip, lastLoginTime}
+	// key 格式：username:ip:port
+	// value: loginRecord 结构体，包含完整的会话信息
+	// 主要用途：
+	// 1. 用于关联登录和登出事件
+	// 2. 补充某些登出场景下缺失的 IP 和端口信息
+	// 3. 跟踪用户会话状态
 	loginRecords = make(map[string]loginRecord)
 )
 
+// loginRecord 存储单个登录会话的详细信息
 type loginRecord struct {
-	ip            string
-	lastLoginTime time.Time
+	username      string    // 用户名
+	ip            string    // 登录源 IP
+	port          string    // 登录源端口
+	lastLoginTime time.Time // 最近一次登录时间
+}
+
+// makeLoginKey 生成登录记录的唯一键
+// 参数：
+//   - username: 用户名
+//   - ip: 登录源 IP
+//   - port: 登录源端口
+//
+// 返回值：
+//   - string: 格式为 "username:ip:port" 的唯一键
+func makeLoginKey(username, ip, port string) string {
+	return fmt.Sprintf("%s:%s:%s", username, ip, port)
 }
 
 func getServerInfo() (*feishu.ServerInfo, error) {
@@ -151,68 +181,86 @@ func (m *Monitor) Start() error {
 // 参数：
 //   - line: 日志行内容
 //   - serverInfo: 服务器信息（主机名和IP）
+//
+// 功能：
+//  1. 检测并处理登录事件
+//  2. 检测并处理多种类型的登出事件
+//  3. 维护登录记录
+//  4. 发送登录和登出通知
 func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 	// 处理登录事件
-	// 从日志中提取用户名和IP地址
 	if matches := loginPattern.FindStringSubmatch(line); len(matches) > 0 {
 		username := matches[1]
 		ip := matches[2]
+		port := matches[3]
+
 		// 记录登录信息
-		loginRecords[username] = loginRecord{
+		loginRecords[makeLoginKey(username, ip, port)] = loginRecord{
+			username:      username,
 			ip:            ip,
+			port:          port,
 			lastLoginTime: time.Now(),
 		}
-		m.logger.Printf("detected login event: username=%s, ip=%s", username, ip)
 
-		if err := m.notifier.SendLoginNotification(username, ip, time.Now(), serverInfo); err != nil {
+		m.logger.Printf("detected login event: username=%s, ip=%s, port=%s", username, ip, port)
+
+		if err := m.notifier.SendLoginNotification(
+			username,
+			fmt.Sprintf("%s:%s", ip, port),
+			time.Now(),
+			serverInfo,
+		); err != nil {
 			m.logger.Printf("failed to send login notification: %v", err)
 		}
 		return
 	}
 
 	// 处理登出事件
-	// 遍历所有登出模式，匹配第一个符合的模式
 	for _, pattern := range logoutPatterns {
 		if matches := pattern.FindStringSubmatch(line); len(matches) > 0 {
-			var username, ip string
+			var username, ip, port string
 
-			// 根据匹配组的数量来确定信息的提取方式
-			switch len(matches) {
-			case 2: // 只匹配到一个组（用户名或IP）
-				if pattern.String() == logoutPatterns[3].String() {
-					// PAM 会话关闭场景：只有用户名
-					username = matches[1]
-					// 尝试从登录记录中获取 IP
-					if record, ok := loginRecords[username]; ok {
-						ip = record.ip
-					} else {
-						ip = "未知IP"
-					}
-				} else {
-					// 其他只有IP的场景（用户主动断开连接）
-					ip = matches[1]
-					// 尝试根据 IP 反查用户名
-					username = "未知用户"
-					for u, record := range loginRecords {
-						if record.ip == ip {
-							username = u
-							break
-						}
-					}
-				}
-			case 3: // 匹配到用户名和IP
+			switch {
+			case len(matches) == 4: // Disconnected from user root 192.168.1.1 port 55030
 				username = matches[1]
 				ip = matches[2]
-			default:
-				continue
+				port = matches[3]
+
+			case len(matches) == 3 && strings.Contains(line, "Received disconnect"): // Received disconnect
+				ip = matches[1]
+				port = matches[2]
+				// 尝试根据 IP 和端口查找用户名
+				for _, record := range loginRecords {
+					if record.ip == ip && record.port == port {
+						username = record.username
+						break
+					}
+				}
+				if username == "" {
+					username = "未知用户"
+				}
+
+			case len(matches) == 2: // session closed
+				username = matches[1]
+				// 尝试根据用户名查找最近的登录记录
+				for _, record := range loginRecords {
+					if record.username == username {
+						ip = record.ip
+						port = record.port
+						break
+					}
+				}
+				if ip == "" {
+					ip = "未知IP"
+					port = "未知端口"
+				}
 			}
 
-			m.logger.Printf("detected logout event: username=%s, ip=%s", username, ip)
+			m.logger.Printf("detected logout event: username=%s, ip=%s, port=%s", username, ip, port)
 
 			// 发送登出通知
-			// 将用户名和IP组合在一起显示
 			if err := m.notifier.SendLogoutNotification(
-				fmt.Sprintf("%s (IP: %s)", username, ip),
+				fmt.Sprintf("%s (IP: %s:%s)", username, ip, port),
 				time.Now(),
 				serverInfo,
 			); err != nil {
@@ -220,8 +268,8 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 			}
 
 			// 清理登录记录
-			if username != "未知用户" {
-				delete(loginRecords, username)
+			if username != "未知用户" && ip != "未知IP" {
+				delete(loginRecords, makeLoginKey(username, ip, port))
 			}
 			return
 		}
