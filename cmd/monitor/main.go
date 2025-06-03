@@ -55,7 +55,17 @@ func main() {
 	if err != nil {
 		panic("failed to initialize logger: " + err.Error())
 	}
-	defer logger.Sync()
+	// 确保在程序退出时同步日志
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			// 在某些平台上，Sync 可能会返回 "sync /dev/stderr: invalid argument" 错误
+			// 这是一个已知问题，可以安全地忽略
+			// 参考：https://github.com/uber-go/zap/issues/880
+			if err.Error() != "sync /dev/stderr: invalid argument" {
+				logger.Error("failed to sync logger", zap.Error(err))
+			}
+		}
+	}()
 
 	// 输出版本信息
 	logger.Info("starting user session monitor",
