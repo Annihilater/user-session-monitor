@@ -43,14 +43,15 @@ func (n *Notifier) SendLoginNotification(username, ip string, loginTime time.Tim
 	return n.sendMessage(msg)
 }
 
-func (n *Notifier) SendLogoutNotification(username string, logoutTime time.Time, serverInfo *ServerInfo) error {
+func (n *Notifier) SendLogoutNotification(username, ip string, logoutTime time.Time, serverInfo *ServerInfo) error {
 	msg := Message{
 		MsgType: "text",
 		Content: map[string]interface{}{
-			"text": fmt.Sprintf("用户登出通知\n服务器：%s\n服务器IP：%s\n用户名：%s\n登出时间：%s",
+			"text": fmt.Sprintf("用户登出通知\n服务器：%s\n服务器IP：%s\n用户名：%s\nIP地址：%s\n登出时间：%s",
 				serverInfo.Hostname,
 				serverInfo.IP,
 				username,
+				ip,
 				logoutTime.Format("2006-01-02 15:04:05")),
 		},
 	}
