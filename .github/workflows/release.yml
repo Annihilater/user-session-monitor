@@ -47,17 +47,24 @@ jobs:
         id: changelog
         shell: bash
         run: |
+          # 确保使用 LF 而不是 CRLF
+          git config --global core.autocrlf false
+
+          # 生成 changelog
           PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -z "$PREVIOUS_TAG" ]; then
-            CHANGELOG=$(git log --pretty=format:"* %s (%h)")
+            # 如果是第一个 tag，获取所有提交
+            echo "changelog<<EOF" >> "$GITHUB_OUTPUT"
+            git log --pretty=format:"* %s (%h)" >> "$GITHUB_OUTPUT"
+            echo "" >> "$GITHUB_OUTPUT"  # 添加一个空行
+            echo "EOF" >> "$GITHUB_OUTPUT"
           else
-            CHANGELOG=$(git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..HEAD)
+            # 获取从上一个 tag 到现在的提交
+            echo "changelog<<EOF" >> "$GITHUB_OUTPUT"
+            git log --pretty=format:"* %s (%h)" "$PREVIOUS_TAG"..HEAD >> "$GITHUB_OUTPUT"
+            echo "" >> "$GITHUB_OUTPUT"  # 添加一个空行
+            echo "EOF" >> "$GITHUB_OUTPUT"
           fi
-          # 处理多行字符串，将换行符替换为 %0A
-          CHANGELOG="${CHANGELOG//'%'/'%25'}"
-          CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
-          CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
-          echo "changelog=$CHANGELOG" >> $GITHUB_OUTPUT
 
       - name: Set version
         id: version
