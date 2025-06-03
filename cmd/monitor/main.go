@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/ziji/user-session-monitor/internal/feishu"
-	"github.com/ziji/user-session-monitor/internal/monitor"
+	"github.com/Annihilater/user-session-monitor/internal/feishu"
+	"github.com/Annihilater/user-session-monitor/internal/monitor"
 )
 
 func main() {
