@@ -2,10 +2,7 @@ module github.com/ziji/user-session-monitor
 
 go 1.21
 
-require (
-	github.com/spf13/viper v1.18.2
-	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
-)
+require github.com/spf13/viper v1.18.2
 
 require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
@@ -22,6 +19,7 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
+	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
