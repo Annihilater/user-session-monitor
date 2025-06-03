@@ -79,44 +79,54 @@ jobs:
           mkdir -p release
 
           # 定义 Linux 平台矩阵
+          declare -A platforms
           platforms=(
-            "linux/amd64"    # x86_64
-            "linux/arm64"    # ARM64/AArch64
-            "linux/arm/v7"   # ARMv7 (树莓派等)
-            "linux/arm/v6"   # ARMv6 (树莓派 Zero/1 等)
-            "linux/386"      # x86 32位
-            "linux/ppc64le"  # PowerPC 64-bit Little Endian
-            "linux/s390x"    # IBM S/390x
-            "linux/mips64le" # MIPS64 Little Endian
-            "linux/mips64"   # MIPS64 Big Endian
+            ["linux/amd64"]="x86_64"
+            ["linux/arm64"]="ARM64/AArch64"
+            ["linux/arm-7"]="ARMv7"
+            ["linux/arm-6"]="ARMv6"
+            ["linux/386"]="x86-32"
+            ["linux/ppc64le"]="PowerPC-64LE"
+            ["linux/s390x"]="S390x"
+            ["linux/mips64le"]="MIPS64-LE"
+            ["linux/mips64"]="MIPS64"
           )
 
           # 构建所有平台
-          for platform in "${platforms[@]}"; do
+          for platform in "${!platforms[@]}"; do
             # 解析操作系统和架构
             os=${platform%/*}
             arch=${platform#*/}
           
             # 处理 ARM 特殊情况
-            if [[ $arch == "arm/v7" ]]; then
-              arch="arm"
-              export GOARM=7
-            elif [[ $arch == "arm/v6" ]]; then
-              arch="arm"
-              export GOARM=6
+            if [[ $arch == "arm-7" ]]; then
+              export GOARCH="arm"
+              export GOARM="7"
+              arch_suffix="v7"
+            elif [[ $arch == "arm-6" ]]; then
+              export GOARCH="arm"
+              export GOARM="6"
+              arch_suffix="v6"
             else
+              export GOARCH="$arch"
               unset GOARM
+              arch_suffix=""
             fi
 
-            echo "Building for $os/$arch..."
-            GOOS=$os GOARCH=$arch go build -ldflags="-X main.version=${VERSION}" -o "release/user-session-monitor" ./cmd/monitor
+            echo "Building for $os/$GOARCH${GOARM:+v$GOARM}..."
+          
+            # 设置 GOOS
+            export GOOS="$os"
+          
+            # 构建
+            go build -ldflags="-X main.version=${VERSION}" -o "release/user-session-monitor" ./cmd/monitor
           
             # 创建压缩包
             cd release
-            if [[ $arch == "arm" && ! -z "$GOARM" ]]; then
-              tar czf "user-session-monitor-${os}-${arch}v${GOARM}.tar.gz" "user-session-monitor"
+            if [ ! -z "$arch_suffix" ]; then
+              tar czf "user-session-monitor-${os}-arm${arch_suffix}.tar.gz" "user-session-monitor"
             else
-              tar czf "user-session-monitor-${os}-${arch}.tar.gz" "user-session-monitor"
+              tar czf "user-session-monitor-${os}-${GOARCH}.tar.gz" "user-session-monitor"
             fi
             rm "user-session-monitor"
             cd ..
@@ -148,8 +158,8 @@ jobs:
             ## 支持的 Linux 平台
             - x86_64 (amd64)
             - ARM64/AArch64 (arm64)
-            - ARMv7 - 树莓派 2/3/4 等 (arm/v7)
-            - ARMv6 - 树莓派 Zero/1 等 (arm/v6)
+            - ARMv7 - 树莓派 2/3/4 等
+            - ARMv6 - 树莓派 Zero/1 等
             - x86 32位 (386)
             - PowerPC 64-bit LE (ppc64le)
             - IBM S/390x (s390x)
