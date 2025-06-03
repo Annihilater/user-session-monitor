@@ -2,4 +2,9 @@ feishu:
   webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url"
 
 monitor:
+  # 认证日志文件路径
+  # Debian/Ubuntu: /var/log/auth.log
+  # CentOS/RHEL: /var/log/secure
+  # Amazon Linux: /var/log/secure
+  # SUSE: /var/log/messages
   log_file: "/var/log/auth.log"
