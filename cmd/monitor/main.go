@@ -1,10 +1,11 @@
 package main
 
 import (
-	"log"
 	"os"
 
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/Annihilater/user-session-monitor/internal/feishu"
 	"github.com/Annihilater/user-session-monitor/internal/monitor"
@@ -16,12 +17,23 @@ func main() {
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath("config")
 
-	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("Failed to read config: %v", err)
-	}
+	// 初始化日志配置
+	config := zap.NewProductionConfig()
+	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	config.EncoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 
-	// 初始化日志
-	logger := log.Default()
+	// 创建日志器
+	logger, err := config.Build()
+	if err != nil {
+		panic("failed to initialize logger: " + err.Error())
+	}
+	defer logger.Sync()
+
+	if err := viper.ReadInConfig(); err != nil {
+		logger.Fatal("failed to read config",
+			zap.Error(err),
+		)
+	}
 
 	// 初始化飞书通知器
 	notifier := feishu.NewNotifier(viper.GetString("feishu.webhook_url"))
@@ -34,9 +46,11 @@ func main() {
 	)
 
 	// 启动监控
-	log.Println("Starting user session monitor...")
+	logger.Info("starting user session monitor")
 	if err := mon.Start(); err != nil {
-		log.Println("Monitor failed", err)
+		logger.Error("monitor failed",
+			zap.Error(err),
+		)
 		os.Exit(1)
 	}
 }
