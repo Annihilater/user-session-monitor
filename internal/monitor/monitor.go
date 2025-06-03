@@ -28,7 +28,7 @@ var (
 		// - 使用 exit 命令
 		// - 使用 logout 命令
 		// - 按 Ctrl + D
-		regexp.MustCompile(`(?m)sshd\[\d+\]: Received disconnect from ([\d\.]+) .* Disconnected by user`),
+		regexp.MustCompile(`(?m)sshd\[\d+\]: Received disconnect from ([\d\.]+) port \d+:11: disconnected by user`),
 
 		// 2. 用户断开连接场景（带用户名）
 		// 匹配示例：sshd[12345]: User userA from 192.168.1.100 disconnected
@@ -53,7 +53,16 @@ var (
 		// - 系统关机或重启
 		regexp.MustCompile(`(?m)sshd\[\d+\]: pam_unix\(sshd:session\): session closed for user (\w+)`),
 	}
+
+	// 用于存储最近的登录记录，用于补充登出信息
+	// key: username, value: {ip, lastLoginTime}
+	loginRecords = make(map[string]loginRecord)
 )
+
+type loginRecord struct {
+	ip            string
+	lastLoginTime time.Time
+}
 
 func getServerInfo() (*feishu.ServerInfo, error) {
 	hostname, err := os.Hostname()
@@ -148,6 +157,11 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 	if matches := loginPattern.FindStringSubmatch(line); len(matches) > 0 {
 		username := matches[1]
 		ip := matches[2]
+		// 记录登录信息
+		loginRecords[username] = loginRecord{
+			ip:            ip,
+			lastLoginTime: time.Now(),
+		}
 		m.logger.Printf("detected login event: username=%s, ip=%s", username, ip)
 
 		if err := m.notifier.SendLoginNotification(username, ip, time.Now(), serverInfo); err != nil {
@@ -168,11 +182,23 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 				if pattern.String() == logoutPatterns[3].String() {
 					// PAM 会话关闭场景：只有用户名
 					username = matches[1]
-					ip = "未知IP"
+					// 尝试从登录记录中获取 IP
+					if record, ok := loginRecords[username]; ok {
+						ip = record.ip
+					} else {
+						ip = "未知IP"
+					}
 				} else {
-					// 其他只有IP的场景
-					username = "未知用户"
+					// 其他只有IP的场景（用户主动断开连接）
 					ip = matches[1]
+					// 尝试根据 IP 反查用户名
+					username = "未知用户"
+					for u, record := range loginRecords {
+						if record.ip == ip {
+							username = u
+							break
+						}
+					}
 				}
 			case 3: // 匹配到用户名和IP
 				username = matches[1]
@@ -191,6 +217,11 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 				serverInfo,
 			); err != nil {
 				m.logger.Printf("failed to send logout notification: %v", err)
+			}
+
+			// 清理登录记录
+			if username != "未知用户" {
+				delete(loginRecords, username)
 			}
 			return
 		}
