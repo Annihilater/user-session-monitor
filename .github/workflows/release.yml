@@ -52,9 +52,9 @@ jobs:
           else
             git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..HEAD > CHANGELOG.md
           fi
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo 'changelog<<CHANGELOG_DELIMITER' >> $GITHUB_OUTPUT
           cat CHANGELOG.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo 'CHANGELOG_DELIMITER' >> $GITHUB_OUTPUT
 
       - name: Set version
         id: version
