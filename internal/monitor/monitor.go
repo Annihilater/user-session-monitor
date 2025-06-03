@@ -3,13 +3,14 @@ package monitor
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/Annihilater/user-session-monitor/internal/feishu"
 )
@@ -123,10 +124,10 @@ func getServerInfo() (*feishu.ServerInfo, error) {
 type Monitor struct {
 	logFile  string
 	notifier *feishu.Notifier
-	logger   *log.Logger
+	logger   *zap.Logger
 }
 
-func NewMonitor(logFile string, notifier *feishu.Notifier, logger *log.Logger) *Monitor {
+func NewMonitor(logFile string, notifier *feishu.Notifier, logger *zap.Logger) *Monitor {
 	return &Monitor{
 		logFile:  logFile,
 		notifier: notifier,
@@ -152,7 +153,10 @@ func (m *Monitor) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to get server info: %v", err)
 	}
-	m.logger.Printf("Server Info - Hostname: %s, IP: %s", serverInfo.Hostname, serverInfo.IP)
+	m.logger.Info("server info",
+		zap.String("hostname", serverInfo.Hostname),
+		zap.String("ip", serverInfo.IP),
+	)
 
 	cmd := exec.Command("tail", "-f", m.logFile)
 	stdout, err := cmd.StdoutPipe()
@@ -202,7 +206,11 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 			lastLoginTime: time.Now(),
 		}
 
-		m.logger.Printf("detected login event: username=%s, ip=%s, port=%s", username, ip, port)
+		m.logger.Info("detected login event",
+			zap.String("username", username),
+			zap.String("ip", ip),
+			zap.String("port", port),
+		)
 
 		if err := m.notifier.SendLoginNotification(
 			username,
@@ -210,7 +218,12 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 			time.Now(),
 			serverInfo,
 		); err != nil {
-			m.logger.Printf("failed to send login notification: %v", err)
+			m.logger.Error("failed to send login notification",
+				zap.Error(err),
+				zap.String("username", username),
+				zap.String("ip", ip),
+				zap.String("port", port),
+			)
 		}
 		return
 	}
@@ -256,7 +269,11 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 				}
 			}
 
-			m.logger.Printf("detected logout event: username=%s, ip=%s, port=%s", username, ip, port)
+			m.logger.Info("detected logout event",
+				zap.String("username", username),
+				zap.String("ip", ip),
+				zap.String("port", port),
+			)
 
 			// 发送登出通知
 			if err := m.notifier.SendLogoutNotification(
@@ -264,7 +281,12 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 				time.Now(),
 				serverInfo,
 			); err != nil {
-				m.logger.Printf("failed to send logout notification: %v", err)
+				m.logger.Error("failed to send logout notification",
+					zap.Error(err),
+					zap.String("username", username),
+					zap.String("ip", ip),
+					zap.String("port", port),
+				)
 			}
 
 			// 清理登录记录
