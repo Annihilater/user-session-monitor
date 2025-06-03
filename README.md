@@ -48,6 +48,16 @@
 - 具有读取系统日志文件的权限
 - 飞书机器人的 Webhook URL
 
+## 命令行参数
+
+```bash
+# 使用默认配置文件路径（config/config.yaml）
+user-session-monitor
+
+# 指定配置文件路径
+user-session-monitor -config /etc/user-session-monitor/config.yaml
+```
+
 ## 快速开始
 
 ### 方式一：一键安装（推荐）
