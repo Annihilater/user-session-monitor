@@ -75,15 +75,56 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           CGO_ENABLED: 0
         run: |
-          # Linux (amd64)
-          GOOS=linux GOARCH=amd64 go build -ldflags="-X main.version=${VERSION}" -o user-session-monitor-linux-amd64 ./cmd/monitor
-          # Linux (arm64)
-          GOOS=linux GOARCH=arm64 go build -ldflags="-X main.version=${VERSION}" -o user-session-monitor-linux-arm64 ./cmd/monitor
-          # 压缩二进制文件
-          tar czf user-session-monitor-linux-amd64.tar.gz user-session-monitor-linux-amd64
-          tar czf user-session-monitor-linux-arm64.tar.gz user-session-monitor-linux-arm64
+          # 创建发布目录
+          mkdir -p release
+
+          # 定义 Linux 平台矩阵
+          platforms=(
+            "linux/amd64"    # x86_64
+            "linux/arm64"    # ARM64/AArch64
+            "linux/arm/v7"   # ARMv7 (树莓派等)
+            "linux/arm/v6"   # ARMv6 (树莓派 Zero/1 等)
+            "linux/386"      # x86 32位
+            "linux/ppc64le"  # PowerPC 64-bit Little Endian
+            "linux/s390x"    # IBM S/390x
+            "linux/mips64le" # MIPS64 Little Endian
+            "linux/mips64"   # MIPS64 Big Endian
+          )
+
+          # 构建所有平台
+          for platform in "${platforms[@]}"; do
+            # 解析操作系统和架构
+            os=${platform%/*}
+            arch=${platform#*/}
+            
+            # 处理 ARM 特殊情况
+            if [[ $arch == "arm/v7" ]]; then
+              arch="arm"
+              export GOARM=7
+            elif [[ $arch == "arm/v6" ]]; then
+              arch="arm"
+              export GOARM=6
+            else
+              unset GOARM
+            fi
+
+            echo "Building for $os/$arch..."
+            GOOS=$os GOARCH=$arch go build -ldflags="-X main.version=${VERSION}" -o "release/user-session-monitor" ./cmd/monitor
+            
+            # 创建压缩包
+            cd release
+            if [[ $arch == "arm" && ! -z "$GOARM" ]]; then
+              tar czf "user-session-monitor-${os}-${arch}v${GOARM}.tar.gz" "user-session-monitor"
+            else
+              tar czf "user-session-monitor-${os}-${arch}.tar.gz" "user-session-monitor"
+            fi
+            rm "user-session-monitor"
+            cd ..
+          done
+
           # 生成校验和
-          sha256sum user-session-monitor-linux-*.tar.gz > checksums.txt
+          cd release
+          sha256sum *.tar.gz > checksums.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -100,17 +141,32 @@ jobs:
                ```
             3. 解压获取二进制文件：
                ```bash
-               tar xzf user-session-monitor-linux-*.tar.gz
+               tar xzf user-session-monitor-*.tar.gz
                ```
             4. 参考 README.md 进行配置和安装
 
-            ## 支持的平台
-            - Linux (amd64)
-            - Linux (arm64)
+            ## 支持的 Linux 平台
+            - x86_64 (amd64)
+            - ARM64/AArch64 (arm64)
+            - ARMv7 - 树莓派 2/3/4 等 (arm/v7)
+            - ARMv6 - 树莓派 Zero/1 等 (arm/v6)
+            - x86 32位 (386)
+            - PowerPC 64-bit LE (ppc64le)
+            - IBM S/390x (s390x)
+            - MIPS64 LE (mips64le)
+            - MIPS64 BE (mips64)
+
+            ## 注意事项
+            - 本程序仅支持 Linux 系统
+            - 需要读取系统日志文件权限
+            - 支持的日志文件路径：
+              - Debian/Ubuntu: `/var/log/auth.log`
+              - CentOS/RHEL: `/var/log/secure`
+              - Amazon Linux: `/var/log/secure`
+              - SUSE: `/var/log/messages`
           files: |
-            user-session-monitor-linux-amd64.tar.gz
-            user-session-monitor-linux-arm64.tar.gz
-            checksums.txt
+            release/*.tar.gz
+            release/checksums.txt
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
