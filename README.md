@@ -1,21 +1,31 @@
 # User Session Monitor
 
-用户会话监控工具，用于监控 Linux 服务器（Debian 11）上的用户登录和登出事件，并通过飞书机器人发送通知。
+用户会话监控工具，用于监控 Linux 服务器上的用户登录和登出事件，并通过飞书机器人发送通知。
 
 ## 功能特点
 
-- 实时监控系统认证日志（`/var/log/auth.log`）
+- 实时监控系统认证日志
 - 检测用户 SSH 登录和登出事件
 - 通过飞书机器人发送即时通知
 - 记录详细的事件日志
 - 支持配置文件管理
 - 显示服务器主机名和IP地址
+- 支持多种 Linux 发行版
+
+## 支持的系统
+
+| 发行版           | 日志文件路径              | 备注     |
+|---------------|---------------------|--------|
+| Debian/Ubuntu | `/var/log/auth.log` | 默认配置   |
+| CentOS/RHEL   | `/var/log/secure`   | 需要修改配置 |
+| Amazon Linux  | `/var/log/secure`   | 需要修改配置 |
+| SUSE          | `/var/log/messages` | 需要修改配置 |
 
 ## 安装要求
 
 - Go 1.21 或更高版本
-- Linux 系统（已在 Debian 11 上测试）
-- 具有读取 `/var/log/auth.log` 的权限
+- Linux 系统
+- 具有读取系统日志文件的权限
 - 飞书机器人的 Webhook URL
 
 ## 快速开始
@@ -39,13 +49,18 @@ make deps
 cp config/config.yaml.example config/config.yaml
 ```
 
-编辑 `config/config.yaml`，填入您的飞书机器人 Webhook URL：
+编辑 `config/config.yaml`，根据您的系统填入正确的日志文件路径和飞书机器人 Webhook URL：
 
 ```yaml
 feishu:
   webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url"
 
 monitor:
+  # 根据您的 Linux 发行版选择正确的日志文件路径：
+  # Debian/Ubuntu: /var/log/auth.log
+  # CentOS/RHEL: /var/log/secure
+  # Amazon Linux: /var/log/secure
+  # SUSE: /var/log/messages
   log_file: "/var/log/auth.log"
 ```
 
@@ -118,22 +133,23 @@ IP地址：xxx.xxx.xxx.xxx
 
 # User Session Monitor
 
-用户会话监控工具，用于监控 Linux 服务器（Debian 11）上的用户登录和登出事件，并通过飞书机器人发送通知。
+用户会话监控工具，用于监控 Linux 服务器上的用户登录和登出事件，并通过飞书机器人发送通知。
 
 ## 功能特点
 
-- 实时监控系统认证日志（`/var/log/auth.log`）
+- 实时监控系统认证日志
 - 检测用户 SSH 登录和登出事件
 - 通过飞书机器人发送即时通知
 - 记录详细的事件日志
 - 支持配置文件管理
 - 显示服务器主机名和IP地址
+- 支持多种 Linux 发行版
 
 ## 安装要求
 
 - Go 1.21 或更高版本
-- Linux 系统（已在 Debian 11 上测试）
-- 具有读取 `/var/log/auth.log` 的权限
+- Linux 系统
+- 具有读取系统日志文件的权限
 - 飞书机器人的 Webhook URL
 
 ## 快速开始
@@ -151,13 +167,18 @@ cd user-session-monitor
 cp config/config.yaml.example config/config.yaml
 ```
 
-编辑 `config/config.yaml`，填入您的飞书机器人 Webhook URL：
+编辑 `config/config.yaml`，根据您的系统填入正确的日志文件路径和飞书机器人 Webhook URL：
 
 ```yaml
 feishu:
   webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url"
 
 monitor:
+  # 根据您的 Linux 发行版选择正确的日志文件路径：
+  # Debian/Ubuntu: /var/log/auth.log
+  # CentOS/RHEL: /var/log/secure
+  # Amazon Linux: /var/log/secure
+  # SUSE: /var/log/messages
   log_file: "/var/log/auth.log"
 ```
 
