@@ -121,7 +121,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/${BINARY_NAME}
+ExecStart=${INSTALL_DIR}/${BINARY_NAME} -config ${CONFIG_DIR}/config.yaml
 WorkingDirectory=/etc/user-session-monitor
 Restart=always
 RestartSec=10
