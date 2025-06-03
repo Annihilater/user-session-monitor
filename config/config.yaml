@@ -1,0 +1,5 @@
+feishu:
+  webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url"
+
+monitor:
+  log_file: "/var/log/auth.log" 
