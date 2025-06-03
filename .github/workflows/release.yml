@@ -7,9 +7,29 @@ on:
 
 permissions:
   contents: write # 用于创建 release
+  packages: write # 用于推送容器镜像
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Tag Format
+        run: |
+          if ! [[ ${{ github.ref }} =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid tag format. Must be in format v1.2.3"
+            exit 1
+          fi
+
   release:
+    name: Create Release
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -36,15 +56,24 @@ jobs:
           cat CHANGELOG.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Set version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
       - name: Build for multiple platforms
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          CGO_ENABLED: 0
         run: |
           # Linux (amd64)
-          GOOS=linux GOARCH=amd64 go build -o user-session-monitor-linux-amd64 ./cmd/monitor
+          GOOS=linux GOARCH=amd64 go build -ldflags="-X main.version=${VERSION}" -o user-session-monitor-linux-amd64 ./cmd/monitor
           # Linux (arm64)
-          GOOS=linux GOARCH=arm64 go build -o user-session-monitor-linux-arm64 ./cmd/monitor
+          GOOS=linux GOARCH=arm64 go build -ldflags="-X main.version=${VERSION}" -o user-session-monitor-linux-arm64 ./cmd/monitor
           # 压缩二进制文件
           tar czf user-session-monitor-linux-amd64.tar.gz user-session-monitor-linux-amd64
           tar czf user-session-monitor-linux-arm64.tar.gz user-session-monitor-linux-arm64
+          # 生成校验和
+          sha256sum user-session-monitor-linux-*.tar.gz > checksums.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -55,10 +84,65 @@ jobs:
 
             ## 安装说明
             1. 下载对应平台的压缩包
-            2. 解压获取二进制文件
-            3. 参考 README.md 进行配置和安装
+            2. 验证文件完整性：
+               ```bash
+               sha256sum -c checksums.txt
+               ```
+            3. 解压获取二进制文件：
+               ```bash
+               tar xzf user-session-monitor-linux-*.tar.gz
+               ```
+            4. 参考 README.md 进行配置和安装
+
+            ## 支持的平台
+            - Linux (amd64)
+            - Linux (arm64)
           files: |
             user-session-monitor-linux-amd64.tar.gz
             user-session-monitor-linux-arm64.tar.gz
+            checksums.txt
           draft: false
           prerelease: false
+          fail_on_unmatched_files: true
+
+  docker:
+    name: Build and Push Docker Image
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
