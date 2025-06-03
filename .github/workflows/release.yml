@@ -83,8 +83,8 @@ jobs:
           platforms=(
             ["linux/amd64"]="x86_64"
             ["linux/arm64"]="ARM64/AArch64"
-            ["linux/arm-7"]="ARMv7"
-            ["linux/arm-6"]="ARMv6"
+            ["linux/armv7"]="ARMv7"
+            ["linux/armv6"]="ARMv6"
             ["linux/386"]="x86-32"
             ["linux/ppc64le"]="PowerPC-64LE"
             ["linux/s390x"]="S390x"
@@ -97,30 +97,34 @@ jobs:
             # 解析操作系统和架构
             os=${platform%/*}
             arch=${platform#*/}
-          
-            # 处理 ARM 特殊情况
-            if [[ $arch == "arm-7" ]]; then
-              export GOARCH="arm"
-              export GOARM="7"
-              arch_suffix="v7"
-            elif [[ $arch == "arm-6" ]]; then
-              export GOARCH="arm"
-              export GOARM="6"
-              arch_suffix="v6"
-            else
-              export GOARCH="$arch"
-              unset GOARM
-              arch_suffix=""
-            fi
 
-            echo "Building for $os/$GOARCH${GOARM:+v$GOARM}..."
-          
             # 设置 GOOS
             export GOOS="$os"
           
+            # 处理不同架构
+            case "$arch" in
+              "armv7")
+                export GOARCH="arm"
+                export GOARM="7"
+                arch_suffix="v7"
+                ;;
+              "armv6")
+                export GOARCH="arm"
+                export GOARM="6"
+                arch_suffix="v6"
+                ;;
+              *)
+                export GOARCH="$arch"
+                unset GOARM
+                arch_suffix=""
+                ;;
+            esac
+
+            echo "Building for $os/$GOARCH${GOARM:+v$GOARM}..."
+
             # 构建
             go build -ldflags="-X main.version=${VERSION}" -o "release/user-session-monitor" ./cmd/monitor
-          
+
             # 创建压缩包
             cd release
             if [ ! -z "$arch_suffix" ]; then
