@@ -50,6 +50,27 @@
 
 ## 快速开始
 
+### 方式一：一键安装（推荐）
+
+对于 Debian/Ubuntu 系统，可以使用以下命令一键安装：
+
+```bash
+# 下载并执行安装脚本
+curl -fsSL https://raw.githubusercontent.com/Annihilater/user-session-monitor/main/scripts/install.sh | sudo bash
+
+# 修改配置文件
+sudo vim /etc/user-session-monitor/config.yaml
+
+# 启动服务
+sudo systemctl start user-session-monitor
+sudo systemctl enable user-session-monitor  # 设置开机自启
+
+# 查看服务状态
+sudo systemctl status user-session-monitor
+```
+
+### 方式二：手动安装
+
 1. 克隆仓库：
 
 ```bash
