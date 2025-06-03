@@ -1,0 +1,88 @@
+# GoReleaser 配置文件
+# 更多配置参考：https://goreleaser.com
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: user-session-monitor
+    main: ./cmd/monitor
+    binary: user-session-monitor
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: user-session-monitor
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+      - LICENSE
+      - config/*
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
+release:
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## 用户会话监控工具 {{ .Tag }} ({{ .Date }})
+
+    这是一个用于监控 Linux 服务器用户 SSH 登录和登出事件的工具。
+
+    ### 支持的功能：
+    - 监控用户 SSH 登录和登出事件
+    - 通过飞书 webhook 发送通知
+    - 支持多种 Linux 发行版
+    - 显示服务器主机名和 IP 地址
+
+    ### 安装说明
+    1. 下载对应系统的压缩包
+    2. 解压后配置 config/config.yaml
+    3. 运行可执行文件
+
+  footer: |
+    ### 支持的系统
+    - Linux (x86_64, arm64)
+    - macOS (x86_64, arm64)
+    - Windows (x86_64)
+
+    ### 反馈问题
+    如有问题请提交 Issue
