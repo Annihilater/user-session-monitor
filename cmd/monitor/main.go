@@ -11,6 +11,13 @@ import (
 	"github.com/Annihilater/user-session-monitor/internal/monitor"
 )
 
+var (
+	// 这些变量会在编译时通过 -ldflags 注入
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	// 初始化配置
 	viper.SetConfigName("config")
@@ -28,6 +35,13 @@ func main() {
 		panic("failed to initialize logger: " + err.Error())
 	}
 	defer logger.Sync()
+
+	// 输出版本信息
+	logger.Info("starting user session monitor",
+		zap.String("version", version),
+		zap.String("commit", commit),
+		zap.String("build_date", date),
+	)
 
 	if err := viper.ReadInConfig(); err != nil {
 		logger.Fatal("failed to read config",
