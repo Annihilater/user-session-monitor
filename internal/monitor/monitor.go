@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -73,6 +74,15 @@ var (
 	// 2. 补充某些登出场景下缺失的 IP 和端口信息
 	// 3. 跟踪用户会话状态
 	loginRecords = make(map[string]loginRecord)
+
+	// 用于存储最近的登出记录，用于去重
+	// key 格式：username:ip:port
+	// value: 最后一次登出时间
+	logoutRecords     = make(map[string]time.Time)
+	logoutRecordMutex sync.RWMutex
+
+	// 登出事件的去重时间窗口
+	logoutDeduplicationWindow = 5 * time.Second
 )
 
 // loginRecord 存储单个登录会话的详细信息
@@ -181,6 +191,39 @@ func (m *Monitor) Start() error {
 	return nil
 }
 
+// isRecentLogout 检查是否是最近的登出事件
+func isRecentLogout(username, ip, port string) bool {
+	key := makeLoginKey(username, ip, port)
+
+	logoutRecordMutex.RLock()
+	lastLogout, exists := logoutRecords[key]
+	logoutRecordMutex.RUnlock()
+
+	if !exists {
+		return false
+	}
+
+	// 如果在去重时间窗口内有相同的登出事件，则认为是重复的
+	return time.Since(lastLogout) < logoutDeduplicationWindow
+}
+
+// recordLogout 记录登出事件
+func recordLogout(username, ip, port string) {
+	key := makeLoginKey(username, ip, port)
+
+	logoutRecordMutex.Lock()
+	logoutRecords[key] = time.Now()
+	logoutRecordMutex.Unlock()
+
+	// 启动一个 goroutine 在一定时间后清理这条记录
+	go func() {
+		time.Sleep(logoutDeduplicationWindow)
+		logoutRecordMutex.Lock()
+		delete(logoutRecords, key)
+		logoutRecordMutex.Unlock()
+	}()
+}
+
 // processLine 处理单行日志内容，检测登录和登出事件
 // 参数：
 //   - line: 日志行内容
@@ -268,6 +311,19 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 					port = "未知端口"
 				}
 			}
+
+			// 检查是否是重复的登出事件
+			if isRecentLogout(username, ip, port) {
+				m.logger.Debug("skipped duplicate logout event",
+					zap.String("username", username),
+					zap.String("ip", ip),
+					zap.String("port", port),
+				)
+				return
+			}
+
+			// 记录这次登出事件
+			recordLogout(username, ip, port)
 
 			m.logger.Info("detected logout event",
 				zap.String("username", username),
