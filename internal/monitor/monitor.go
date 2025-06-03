@@ -277,7 +277,8 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 
 			// 发送登出通知
 			if err := m.notifier.SendLogoutNotification(
-				fmt.Sprintf("%s (IP: %s:%s)", username, ip, port),
+				username,
+				fmt.Sprintf("%s:%s", ip, port),
 				time.Now(),
 				serverInfo,
 			); err != nil {
