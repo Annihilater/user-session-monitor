@@ -1,7 +1,9 @@
 package main
 
 import (
+	"flag"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -16,13 +18,32 @@ var (
 	version = "dev"
 	commit  = "none"
 	date    = "unknown"
+
+	// 命令行参数
+	configFile = flag.String("config", "", "配置文件路径，默认为 config/config.yaml")
 )
 
 func main() {
+	// 解析命令行参数
+	flag.Parse()
+
 	// 初始化配置
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath("config")
+
+	// 如果指定了配置文件路径，则使用指定的路径
+	if *configFile != "" {
+		// 获取配置文件的绝对路径
+		absPath, err := filepath.Abs(*configFile)
+		if err != nil {
+			panic("无法获取配置文件的绝对路径: " + err.Error())
+		}
+		// 设置配置文件路径
+		viper.SetConfigFile(absPath)
+	} else {
+		// 使用默认配置文件路径
+		viper.AddConfigPath("config")
+	}
 
 	// 初始化日志配置
 	config := zap.NewProductionConfig()
@@ -41,6 +62,7 @@ func main() {
 		zap.String("version", version),
 		zap.String("commit", commit),
 		zap.String("build_date", date),
+		zap.String("config_file", viper.ConfigFileUsed()),
 	)
 
 	if err := viper.ReadInConfig(); err != nil {
