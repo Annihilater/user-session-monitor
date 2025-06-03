@@ -17,7 +17,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # 设置变量
-VERSION="v1.0.3"
+VERSION="v1.0.5"
 ARCH=$(uname -m)
 BINARY_NAME="user-session-monitor"
 INSTALL_DIR="/usr/local/bin"
