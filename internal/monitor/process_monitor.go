@@ -13,6 +13,7 @@ import (
 type ProcessInfo struct {
 	PID           int32
 	Name          string
+	Command       string
 	CPUPercent    float64
 	MemoryUsage   uint64
 	MemoryPercent float32
@@ -67,6 +68,11 @@ func (pm *ProcessMonitor) getTopProcesses(count int) ([]ProcessInfo, error) {
 			continue
 		}
 
+		command, err := p.Cmdline()
+		if err != nil {
+			command = "未知"
+		}
+
 		cpu, err := p.CPUPercent()
 		if err != nil {
 			continue
@@ -93,6 +99,7 @@ func (pm *ProcessMonitor) getTopProcesses(count int) ([]ProcessInfo, error) {
 		processInfos = append(processInfos, ProcessInfo{
 			PID:           p.Pid,
 			Name:          name,
+			Command:       command,
 			CPUPercent:    cpu,
 			MemoryUsage:   mem.RSS,
 			MemoryPercent: memPercent,
@@ -150,6 +157,7 @@ func (pm *ProcessMonitor) monitor() {
 					zap.Int("proc_rank", i+1),
 					zap.Int32("proc_pid", proc.PID),
 					zap.String("proc_name", proc.Name),
+					zap.String("proc_command", proc.Command),
 					zap.String("proc_cpu_percent", formatPercent(proc.CPUPercent)),
 					zap.String("proc_memory_usage", formatBytes(proc.MemoryUsage)),
 					zap.String("proc_memory_percent", formatPercent(float64(proc.MemoryPercent))),
