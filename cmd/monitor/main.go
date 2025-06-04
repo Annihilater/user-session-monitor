@@ -31,6 +31,11 @@ var (
 		"",
 		"配置文件路径，默认为 /etc/user-session-monitor/config.yaml",
 	)
+
+	// 用于存储当前运行的监控器实例
+	currentMonitor  *monitor.Monitor
+	currentNotifier *feishu.Notifier
+	currentLogger   *zap.Logger
 )
 
 const (
@@ -229,56 +234,66 @@ func showMenu() error {
 }
 
 func handleStart() error {
-	cmd := exec.Command("systemctl", "start", serviceName)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("启动服务失败: %v", err)
+	if currentMonitor != nil {
+		return fmt.Errorf("服务已经在运行中")
 	}
-	fmt.Println("服务已启动")
-	return nil
+	return startMonitor()
 }
 
 func handleStop() error {
-	cmd := exec.Command("systemctl", "stop", serviceName)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("停止服务失败: %v", err)
+	if currentMonitor == nil {
+		return fmt.Errorf("服务未运行")
 	}
+
+	// 优雅关闭
+	if currentLogger != nil {
+		currentLogger.Info("正在关闭服务...")
+	}
+
+	if currentMonitor != nil {
+		currentMonitor.Stop()
+		currentMonitor = nil
+	}
+
+	if currentNotifier != nil {
+		currentNotifier.Stop()
+		currentNotifier = nil
+	}
+
+	if currentLogger != nil {
+		currentLogger.Info("服务已关闭")
+		currentLogger = nil
+	}
+
+	// 删除 PID 文件
+	os.Remove(pidFile)
+
 	fmt.Println("服务已停止")
 	return nil
 }
 
 func handleRestart() error {
-	cmd := exec.Command("systemctl", "restart", serviceName)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("重启服务失败: %v", err)
+	if err := handleStop(); err != nil {
+		return fmt.Errorf("停止服务失败: %v", err)
 	}
-	fmt.Println("服务已重启")
-	return nil
+	return handleStart()
 }
 
 func handleStatus() error {
-	// 检查服务是否在运行
-	cmd := exec.Command("systemctl", "status", serviceName)
+	if currentMonitor == nil {
+		fmt.Println("服务状态: 未运行")
+		return nil
+	}
+
+	fmt.Println("服务状态: 运行中")
+
+	// 获取进程信息
+	pid := os.Getpid()
+	cmd := exec.Command("ps", "-p", fmt.Sprintf("%d", pid), "-o", "pid,ppid,user,%cpu,%mem,etime,command")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("获取服务状态失败: %v", err)
-	}
-
-	// 获取进程信息
-	if _, err := os.Stat(pidFile); err == nil {
-		pidBytes, err := os.ReadFile(pidFile)
-		if err != nil {
-			return fmt.Errorf("读取PID文件失败: %v", err)
-		}
-		pid := strings.TrimSpace(string(pidBytes))
-
-		// 获取进程详细信息
-		cmd = exec.Command("ps", "-p", pid, "-o", "pid,ppid,user,%cpu,%mem,etime,command")
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("获取进程信息失败: %v", err)
-		}
+		return fmt.Errorf("获取进程信息失败: %v", err)
 	}
 
 	return nil
@@ -373,10 +388,7 @@ func handleCheck() error {
 }
 
 func getServiceStatus() string {
-	cmd := exec.Command("systemctl", "is-active", serviceName)
-	output, _ := cmd.Output()
-	status := strings.TrimSpace(string(output))
-	if status == "active" {
+	if currentMonitor != nil {
 		return "运行中"
 	}
 	return "未运行"
@@ -421,6 +433,8 @@ func startMonitor() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %v", err)
 	}
+	currentLogger = logger
+
 	// 确保在程序退出时同步日志
 	defer func() {
 		if err := logger.Sync(); err != nil {
@@ -454,19 +468,20 @@ func startMonitor() error {
 		eventBus,
 		logger,
 	)
+	currentMonitor = mon
 
 	// 初始化飞书通知器
 	notifier := feishu.NewNotifier(
 		viper.GetString("feishu.webhook_url"),
 		logger,
 	)
+	currentNotifier = notifier
 
 	// 写入PID文件
 	pid := os.Getpid()
 	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
 		logger.Error("写入PID文件失败", zap.Error(err))
 	}
-	defer os.Remove(pidFile)
 
 	// 启动监控器
 	if err := mon.Start(); err != nil {
@@ -476,6 +491,8 @@ func startMonitor() error {
 	// 启动通知器
 	notifier.Start(eventBus.Subscribe())
 
+	fmt.Println("服务已启动")
+
 	// 等待信号
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -483,11 +500,5 @@ func startMonitor() error {
 	// 等待退出信号
 	<-sigChan
 
-	// 优雅关闭
-	logger.Info("正在关闭服务...")
-	mon.Stop()
-	notifier.Stop()
-	logger.Info("服务已关闭")
-
-	return nil
+	return handleStop()
 }
