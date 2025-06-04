@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -166,12 +167,12 @@ func (hm *HardwareMonitor) collectAndLogHardwareInfo() {
 		// CPU信息
 		zap.String("cpu_model", cpuModel),
 		zap.String("cpu_arch", hostInfo.KernelArch),
-		zap.Int("physical_cpu_cores", physicalCores),
-		zap.Int("logical_cpu_cores", logicalCores),
+		zap.String("physical_cpu_cores", fmt.Sprintf("%d 核", physicalCores)),
+		zap.String("logical_cpu_cores", fmt.Sprintf("%d 核", logicalCores)),
 		// 内存信息
-		zap.Float64("total_memory_gb", formatBytesToGB(memInfo.Total)),
+		zap.String("total_memory", fmt.Sprintf("%.2f GB", formatBytesToGB(memInfo.Total))),
 		// 磁盘信息
-		zap.Float64("total_disk_gb", totalDiskGB),
+		zap.String("total_disk", fmt.Sprintf("%.2f GB", totalDiskGB)),
 		// 网络信息
 		zap.String("public_ip", publicIP),
 		// 系统信息
