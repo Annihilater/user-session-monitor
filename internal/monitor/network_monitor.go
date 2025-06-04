@@ -38,40 +38,6 @@ func (nm *NetworkMonitor) Stop() {
 	close(nm.stopChan)
 }
 
-// formatBytes 将字节数转换为合适的单位
-func formatBytes(bytes uint64) string {
-	const (
-		B  = 1
-		KB = 1024 * B
-		MB = 1024 * KB
-		GB = 1024 * MB
-		TB = 1024 * GB
-	)
-
-	var unit string
-	var value float64
-
-	switch {
-	case bytes >= TB:
-		unit = "TB"
-		value = float64(bytes) / float64(TB)
-	case bytes >= GB:
-		unit = "GB"
-		value = float64(bytes) / float64(GB)
-	case bytes >= MB:
-		unit = "MB"
-		value = float64(bytes) / float64(MB)
-	case bytes >= KB:
-		unit = "KB"
-		value = float64(bytes) / float64(KB)
-	default:
-		unit = "B"
-		value = float64(bytes)
-	}
-
-	return fmt.Sprintf("%.2f %s", value, unit)
-}
-
 // formatSpeed 将速度转换为合适的单位
 func formatSpeed(bytesPerSec float64) string {
 	const (
