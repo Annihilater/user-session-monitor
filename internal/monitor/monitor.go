@@ -217,6 +217,7 @@ type Monitor struct {
 	logger     *zap.Logger
 	stopChan   chan struct{}
 	serverInfo *types.ServerInfo
+	TCPMonitor *TCPMonitor // 改为大写，使其可导出
 }
 
 func NewMonitor(logFile string, eventBus *event.EventBus, logger *zap.Logger) *Monitor {
@@ -261,6 +262,10 @@ func (m *Monitor) Start() error {
 		zap.String("log_file", m.logFile),
 	)
 
+	// 启动 TCP 监控
+	m.TCPMonitor = NewTCPMonitor(m.logger, 1*time.Second) // 每秒监控一次
+	m.TCPMonitor.Start()
+
 	// 启动监控协程
 	go m.monitor()
 
@@ -269,6 +274,9 @@ func (m *Monitor) Start() error {
 
 func (m *Monitor) Stop() {
 	close(m.stopChan)
+	if m.TCPMonitor != nil {
+		m.TCPMonitor.Stop()
+	}
 }
 
 func (m *Monitor) monitor() {
