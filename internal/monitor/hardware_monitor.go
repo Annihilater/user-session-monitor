@@ -79,11 +79,6 @@ func (hm *HardwareMonitor) getPublicIP() string {
 	return "未知"
 }
 
-// formatBytes 格式化字节大小为GB
-func formatBytesToGB(bytes uint64) float64 {
-	return float64(bytes) / (1024 * 1024 * 1024)
-}
-
 // monitorHardware 监控硬件信息
 func (hm *HardwareMonitor) monitorHardware() {
 	ticker := time.NewTicker(hm.interval)
