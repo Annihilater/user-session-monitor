@@ -117,6 +117,19 @@ func (hm *HardwareMonitor) collectAndLogHardwareInfo() {
 		cpuModel = "未知"
 	}
 
+	// 获取CPU核心数
+	physicalCores, err := cpu.Counts(false) // false 表示只获取物理核心数
+	if err != nil {
+		hm.logger.Error("获取CPU核心数失败", zap.Error(err))
+		return
+	}
+
+	logicalCores, err := cpu.Counts(true) // true 表示获取逻辑核心数（包括超线程）
+	if err != nil {
+		hm.logger.Error("获取CPU逻辑核心数失败", zap.Error(err))
+		return
+	}
+
 	// 获取内存信息
 	memInfo, err := mem.VirtualMemory()
 	if err != nil {
@@ -153,7 +166,8 @@ func (hm *HardwareMonitor) collectAndLogHardwareInfo() {
 		// CPU信息
 		zap.String("cpu_model", cpuModel),
 		zap.String("cpu_arch", hostInfo.KernelArch),
-		zap.Int("cpu_cores", int(hostInfo.Procs)),
+		zap.Int("physical_cpu_cores", physicalCores),
+		zap.Int("logical_cpu_cores", logicalCores),
 		// 内存信息
 		zap.Float64("total_memory_gb", formatBytesToGB(memInfo.Total)),
 		// 磁盘信息
