@@ -292,8 +292,8 @@ func (m *Monitor) Start() error {
 	}
 
 	hwInterval := time.Duration(hwIntervalFloat * float64(time.Second))
-	if hwInterval < time.Hour {
-		hwInterval = time.Hour // 默认1小时，最小1小时
+	if hwInterval < 100*time.Millisecond {
+		hwInterval = time.Second // 默认1秒，最小100毫秒
 		m.logger.Warn("硬件监控间隔太小，使用默认值", zap.Duration("interval", hwInterval))
 	}
 
