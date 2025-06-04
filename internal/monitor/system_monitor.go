@@ -68,11 +68,24 @@ func (sm *SystemMonitor) monitor() {
 			if err != nil {
 				sm.logger.Error("获取内存信息失败", zap.Error(err))
 			} else {
+				// 计算 Swap 使用量和使用率
+				swapUsed := memInfo.SwapTotal - memInfo.SwapFree
+				swapUsedPercent := float64(0)
+				if memInfo.SwapTotal > 0 {
+					swapUsedPercent = float64(swapUsed) / float64(memInfo.SwapTotal) * 100
+				}
+
 				sm.logger.Info("内存状态",
+					// 物理内存指标
 					zap.String("usage", fmt.Sprintf("%.2f%%", memInfo.UsedPercent)),
 					zap.String("total", formatBytes(memInfo.Total)),
 					zap.String("used", formatBytes(memInfo.Used)),
 					zap.String("available", formatBytes(memInfo.Available)),
+					// 虚拟内存（Swap）指标
+					zap.String("swap_total", formatBytes(memInfo.SwapTotal)),
+					zap.String("swap_used", formatBytes(swapUsed)),
+					zap.String("swap_free", formatBytes(memInfo.SwapFree)),
+					zap.String("swap_usage", fmt.Sprintf("%.2f%%", swapUsedPercent)),
 				)
 			}
 
