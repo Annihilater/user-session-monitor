@@ -1,7 +1,6 @@
 package monitor
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/net"
@@ -36,40 +35,6 @@ func (nm *NetworkMonitor) Start() {
 // Stop 停止网络监控
 func (nm *NetworkMonitor) Stop() {
 	close(nm.stopChan)
-}
-
-// formatSpeed 将速度转换为合适的单位
-func formatSpeed(bytesPerSec float64) string {
-	const (
-		Bps  = 1
-		KBps = 1024 * Bps
-		MBps = 1024 * KBps
-		GBps = 1024 * MBps
-		TBps = 1024 * GBps
-	)
-
-	var unit string
-	var value float64
-
-	switch {
-	case bytesPerSec >= TBps:
-		unit = "TB/s"
-		value = bytesPerSec / TBps
-	case bytesPerSec >= GBps:
-		unit = "GB/s"
-		value = bytesPerSec / GBps
-	case bytesPerSec >= MBps:
-		unit = "MB/s"
-		value = bytesPerSec / MBps
-	case bytesPerSec >= KBps:
-		unit = "KB/s"
-		value = bytesPerSec / KBps
-	default:
-		unit = "B/s"
-		value = bytesPerSec
-	}
-
-	return fmt.Sprintf("%.2f %s", value, unit)
 }
 
 // monitor 网络监控主循环
