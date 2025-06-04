@@ -5,16 +5,25 @@ import (
 	"time"
 )
 
+// 定义容量单位
+const (
+	B  = 1
+	KB = 1024 * B
+	MB = 1024 * KB
+	GB = 1024 * MB
+	TB = 1024 * GB
+)
+
+const (
+	Bps  = 1
+	KBps = 1024 * Bps
+	MBps = 1024 * KBps
+	GBps = 1024 * MBps
+	TBps = 1024 * GBps
+)
+
 // formatBytes 将字节数转换为人类可读的格式
 func formatBytes(bytes uint64) string {
-	const (
-		B  = 1
-		KB = 1024 * B
-		MB = 1024 * KB
-		GB = 1024 * MB
-		TB = 1024 * GB
-	)
-
 	var (
 		value float64
 		unit  string
@@ -41,31 +50,6 @@ func formatBytes(bytes uint64) string {
 	return fmt.Sprintf("%.2f %s", value, unit)
 }
 
-// 定义容量单位
-const (
-	B  = 1
-	KB = 1024 * B
-	MB = 1024 * KB
-	GB = 1024 * MB
-	TB = 1024 * GB
-)
-
-// formatSize 格式化字节大小为人类可读格式
-func formatSize(bytes uint64) (float64, string) {
-	switch {
-	case bytes >= TB:
-		return float64(bytes) / TB, "TB"
-	case bytes >= GB:
-		return float64(bytes) / GB, "GB"
-	case bytes >= MB:
-		return float64(bytes) / MB, "MB"
-	case bytes >= KB:
-		return float64(bytes) / KB, "KB"
-	default:
-		return float64(bytes), "B"
-	}
-}
-
 // formatBytes 格式化字节大小为GB
 func formatBytesToGB(bytes uint64) float64 {
 	return float64(bytes) / (1024 * 1024 * 1024)
@@ -83,14 +67,6 @@ func formatUptime(uptime time.Duration) string {
 
 // formatSpeed 将速度转换为合适的单位
 func formatSpeed(bytesPerSec float64) string {
-	const (
-		Bps  = 1
-		KBps = 1024 * Bps
-		MBps = 1024 * KBps
-		GBps = 1024 * MBps
-		TBps = 1024 * GBps
-	)
-
 	var unit string
 	var value float64
 
