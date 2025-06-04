@@ -17,7 +17,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # 设置变量
-VERSION="v1.0.9"
+VERSION="v1.0.10"
 ARCH=$(uname -m)
 BINARY_NAME="user-session-monitor"
 INSTALL_DIR="/usr/local/bin"
@@ -121,7 +121,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=${INSTALL_DIR}/${BINARY_NAME} -config ${CONFIG_DIR}/config.yaml
+ExecStart=${INSTALL_DIR}/${BINARY_NAME} run -config ${CONFIG_DIR}/config.yaml
 WorkingDirectory=/etc/user-session-monitor
 Restart=always
 RestartSec=10
