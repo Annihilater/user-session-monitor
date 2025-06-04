@@ -46,7 +46,7 @@ test:
 install: build
 	sudo cp $(BINARY) /usr/local/bin/
 	sudo mkdir -p /etc/user-session-monitor
-	sudo cp -n config/config.yaml.example /etc/user-session-monitor/config.yaml
+	sudo cp -n config/config.yaml /etc/user-session-monitor/config.yaml
 	@echo "安装完成！请修改配置文件: /etc/user-session-monitor/config.yaml"
 
 # 卸载
