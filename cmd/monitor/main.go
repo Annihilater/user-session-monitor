@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/Annihilater/user-session-monitor/internal/event"
 	"github.com/Annihilater/user-session-monitor/internal/feishu"
 	"github.com/Annihilater/user-session-monitor/internal/monitor"
 )
@@ -383,21 +386,42 @@ func startMonitor() error {
 		return fmt.Errorf("failed to read config: %v", err)
 	}
 
-	// 初始化飞书通知器
-	notifier := feishu.NewNotifier(viper.GetString("feishu.webhook_url"))
+	// 创建事件总线
+	eventBus := event.NewEventBus(100) // 设置适当的缓冲区大小
 
 	// 初始化监控器
 	mon := monitor.NewMonitor(
 		viper.GetString("monitor.log_file"),
-		notifier,
+		eventBus,
 		logger,
 	)
 
-	// 启动监控
-	logger.Info("starting user session monitor")
+	// 初始化飞书通知器
+	notifier := feishu.NewNotifier(
+		viper.GetString("feishu.webhook_url"),
+		logger,
+	)
+
+	// 启动监控器
 	if err := mon.Start(); err != nil {
-		return fmt.Errorf("monitor failed: %v", err)
+		return fmt.Errorf("启动监控器失败: %v", err)
 	}
+
+	// 启动通知器
+	notifier.Start(eventBus.Subscribe())
+
+	// 等待信号
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// 等待退出信号
+	<-sigChan
+
+	// 优雅关闭
+	logger.Info("正在关闭服务...")
+	mon.Stop()
+	notifier.Stop()
+	logger.Info("服务已关闭")
 
 	return nil
 }
