@@ -211,13 +211,15 @@ func getServerInfo() (*types.ServerInfo, error) {
 	}, nil
 }
 
+// Monitor 监控器
 type Monitor struct {
-	logFile    string
-	eventBus   *event.EventBus
-	logger     *zap.Logger
-	stopChan   chan struct{}
-	serverInfo *types.ServerInfo
-	TCPMonitor *TCPMonitor // 改为大写，使其可导出
+	logFile       string
+	eventBus      *event.EventBus
+	logger        *zap.Logger
+	stopChan      chan struct{}
+	serverInfo    *types.ServerInfo
+	TCPMonitor    *TCPMonitor    // TCP 连接监控
+	SystemMonitor *SystemMonitor // 系统资源监控
 }
 
 func NewMonitor(logFile string, eventBus *event.EventBus, logger *zap.Logger) *Monitor {
@@ -266,6 +268,10 @@ func (m *Monitor) Start() error {
 	m.TCPMonitor = NewTCPMonitor(m.logger, 1*time.Second) // 每秒监控一次
 	m.TCPMonitor.Start()
 
+	// 启动系统资源监控
+	m.SystemMonitor = NewSystemMonitor(m.logger, 5*time.Second, []string{"/"}) // 每5秒监控一次
+	m.SystemMonitor.Start()
+
 	// 启动监控协程
 	go m.monitor()
 
@@ -276,6 +282,9 @@ func (m *Monitor) Stop() {
 	close(m.stopChan)
 	if m.TCPMonitor != nil {
 		m.TCPMonitor.Stop()
+	}
+	if m.SystemMonitor != nil {
+		m.SystemMonitor.Stop()
 	}
 }
 
