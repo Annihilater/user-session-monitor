@@ -214,14 +214,15 @@ func getServerInfo() (*types.ServerInfo, error) {
 
 // Monitor 监控器
 type Monitor struct {
-	logFile         string
-	eventBus        *event.EventBus
-	logger          *zap.Logger
-	stopChan        chan struct{}
-	serverInfo      *types.ServerInfo
-	TCPMonitor      *TCPMonitor      // TCP 连接监控
-	SystemMonitor   *SystemMonitor   // 系统资源监控
-	HardwareMonitor *HardwareMonitor // 硬件信息监控
+	logFile          string
+	eventBus         *event.EventBus
+	logger           *zap.Logger
+	stopChan         chan struct{}
+	serverInfo       *types.ServerInfo
+	TCPMonitor       *TCPMonitor       // TCP 连接监控
+	SystemMonitor    *SystemMonitor    // 系统资源监控
+	HardwareMonitor  *HardwareMonitor  // 硬件信息监控
+	HeartbeatMonitor *HeartbeatMonitor // 心跳监控
 }
 
 func NewMonitor(logFile string, eventBus *event.EventBus, logger *zap.Logger) *Monitor {
@@ -270,12 +271,14 @@ func (m *Monitor) Start() error {
 	tcpIntervalFloat := viper.GetFloat64("monitor.tcp.interval")
 	sysIntervalFloat := viper.GetFloat64("monitor.system.interval")
 	hwIntervalFloat := viper.GetFloat64("monitor.hardware.interval")
+	heartbeatIntervalFloat := viper.GetFloat64("monitor.heartbeat.interval")
 
 	// 记录读取到的配置
 	m.logger.Info("读取监控配置",
 		zap.Float64("tcp_interval_seconds", tcpIntervalFloat),
 		zap.Float64("system_interval_seconds", sysIntervalFloat),
 		zap.Float64("hardware_interval_seconds", hwIntervalFloat),
+		zap.Float64("heartbeat_interval_seconds", heartbeatIntervalFloat),
 	)
 
 	// 转换为 Duration
@@ -307,11 +310,19 @@ func (m *Monitor) Start() error {
 		hwDiskPaths = diskPaths // 默认使用系统监控的磁盘路径
 	}
 
+	// 处理心跳监控间隔
+	heartbeatInterval := time.Duration(heartbeatIntervalFloat * float64(time.Second))
+	if heartbeatInterval < 100*time.Millisecond {
+		heartbeatInterval = time.Second // 默认1秒，最小100毫秒
+		m.logger.Warn("心跳监控间隔太小，使用默认值", zap.Duration("interval", heartbeatInterval))
+	}
+
 	// 记录最终使用的配置
 	m.logger.Info("使用监控配置",
 		zap.Duration("tcp_interval", tcpInterval),
 		zap.Duration("system_interval", sysInterval),
 		zap.Duration("hardware_interval", hwInterval),
+		zap.Duration("heartbeat_interval", heartbeatInterval),
 		zap.Strings("disk_paths", diskPaths),
 		zap.Strings("hardware_disk_paths", hwDiskPaths),
 	)
@@ -319,6 +330,10 @@ func (m *Monitor) Start() error {
 	// 启动 TCP 监控
 	m.TCPMonitor = NewTCPMonitor(m.logger, tcpInterval)
 	m.TCPMonitor.Start()
+
+	// 启动心跳监控
+	m.HeartbeatMonitor = NewHeartbeatMonitor(m.logger, heartbeatInterval)
+	m.HeartbeatMonitor.Start()
 
 	// 启动系统资源监控
 	m.SystemMonitor = NewSystemMonitor(m.logger, sysInterval, diskPaths)
@@ -344,6 +359,9 @@ func (m *Monitor) Stop() {
 	}
 	if m.HardwareMonitor != nil {
 		m.HardwareMonitor.Stop()
+	}
+	if m.HeartbeatMonitor != nil {
+		m.HeartbeatMonitor.Stop()
 	}
 }
 
