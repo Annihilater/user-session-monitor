@@ -9,6 +9,31 @@ import (
 	"go.uber.org/zap"
 )
 
+// 定义容量单位
+const (
+	B  = 1
+	KB = 1024 * B
+	MB = 1024 * KB
+	GB = 1024 * MB
+	TB = 1024 * GB
+)
+
+// formatSize 格式化字节大小为人类可读格式
+func formatSize(bytes uint64) (float64, string) {
+	switch {
+	case bytes >= TB:
+		return float64(bytes) / TB, "TB"
+	case bytes >= GB:
+		return float64(bytes) / GB, "GB"
+	case bytes >= MB:
+		return float64(bytes) / MB, "MB"
+	case bytes >= KB:
+		return float64(bytes) / KB, "KB"
+	default:
+		return float64(bytes), "B"
+	}
+}
+
 // SystemMonitor 系统资源监控器
 type SystemMonitor struct {
 	logger    *zap.Logger
@@ -82,12 +107,21 @@ func (sm *SystemMonitor) monitorMemory() {
 				sm.logger.Error("获取内存使用率失败", zap.Error(err))
 				continue
 			}
+
+			// 格式化内存大小
+			totalSize, totalUnit := formatSize(v.Total)
+			usedSize, usedUnit := formatSize(v.Used)
+			freeSize, freeUnit := formatSize(v.Free)
+
 			sm.logger.Info("内存使用情况",
 				zap.Float64("used_percentage", v.UsedPercent),
-				zap.String("unit", "%"),
-				zap.Uint64("total", v.Total),
-				zap.Uint64("used", v.Used),
-				zap.Uint64("free", v.Free),
+				zap.String("percentage_unit", "%"),
+				zap.Float64("total", totalSize),
+				zap.String("total_unit", totalUnit),
+				zap.Float64("used", usedSize),
+				zap.String("used_unit", usedUnit),
+				zap.Float64("free", freeSize),
+				zap.String("free_unit", freeUnit),
 			)
 		}
 	}
@@ -112,13 +146,22 @@ func (sm *SystemMonitor) monitorDisk() {
 					)
 					continue
 				}
+
+				// 格式化磁盘大小
+				totalSize, totalUnit := formatSize(usage.Total)
+				usedSize, usedUnit := formatSize(usage.Used)
+				freeSize, freeUnit := formatSize(usage.Free)
+
 				sm.logger.Info("磁盘使用情况",
 					zap.String("path", path),
 					zap.Float64("used_percentage", usage.UsedPercent),
-					zap.String("unit", "%"),
-					zap.Uint64("total", usage.Total),
-					zap.Uint64("used", usage.Used),
-					zap.Uint64("free", usage.Free),
+					zap.String("percentage_unit", "%"),
+					zap.Float64("total", totalSize),
+					zap.String("total_unit", totalUnit),
+					zap.Float64("used", usedSize),
+					zap.String("used_unit", usedUnit),
+					zap.Float64("free", freeSize),
+					zap.String("free_unit", freeUnit),
 				)
 			}
 		}
