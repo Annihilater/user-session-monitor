@@ -8,3 +8,9 @@ monitor:
   # Amazon Linux: /var/log/secure
   # SUSE: /var/log/messages
   log_file: "/var/log/auth.log"
+  system:
+    interval: 0.5 # 系统监控间隔（秒）
+    disk_paths: # 要监控的磁盘路径列表
+      - "/"
+  tcp:
+    interval: 0.5 # TCP 监控间隔（秒）
