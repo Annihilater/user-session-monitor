@@ -32,8 +32,8 @@ run: build
 	./$(BINARY)
 
 run-debug: clean-process
-	@echo "直接运行源码（用于调试） $(MAIN_GO)..."
-	go run $(MAIN_GO)
+	@echo "直接运行源码启动服务（用于调试）..."
+	go run $(MAIN_GO) start
 
 check: build
 	@echo "检查服务状态..."
