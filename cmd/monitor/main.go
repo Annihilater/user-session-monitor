@@ -38,43 +38,54 @@ func main() {
 	// 获取子命令
 	args := flag.Args()
 	if len(args) == 0 {
-		showMenu()
+		if err := showMenu(); err != nil {
+			fmt.Printf("执行命令失败: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 
 	// 将命令转换为小写以实现大小写不敏感
 	cmd := strings.ToLower(args[0])
+	var err error
 	switch cmd {
 	case "start":
-		handleStart()
+		err = handleStart()
 	case "stop":
-		handleStop()
+		err = handleStop()
 	case "restart":
-		handleRestart()
+		err = handleRestart()
 	case "status":
-		handleStatus()
+		err = handleStatus()
 	case "enable":
-		handleEnable()
+		err = handleEnable()
 	case "disable":
-		handleDisable()
+		err = handleDisable()
 	case "log":
-		handleLog()
+		err = handleLog()
 	case "config":
-		handleConfig()
+		err = handleConfig()
 	case "install":
-		handleInstall()
+		err = handleInstall()
 	case "uninstall":
-		handleUninstall()
+		err = handleUninstall()
 	case "version":
-		handleVersion()
+		err = handleVersion()
+	case "run":
+		err = startMonitor() // 添加 run 命令来启动监控
 	default:
 		fmt.Printf("未知的命令: %s\n", args[0])
 		printUsage()
 		os.Exit(1)
 	}
+
+	if err != nil {
+		fmt.Printf("执行命令失败: %v\n", err)
+		os.Exit(1)
+	}
 }
 
-func showMenu() {
+func showMenu() error {
 	// 获取服务状态
 	status := getServiceStatus()
 	enabled := isServiceEnabled()
@@ -104,34 +115,39 @@ func showMenu() {
 请输入选择 [0-10]: `, status, enabled)
 
 	var choice string
-	fmt.Scanln(&choice)
+	if _, err := fmt.Scanln(&choice); err != nil {
+		return fmt.Errorf("读取输入失败: %v", err)
+	}
 
+	var err error
 	switch choice {
 	case "0":
-		handleConfig()
+		err = handleConfig()
 	case "1":
-		handleInstall()
+		err = handleInstall()
 	case "2":
-		handleUninstall()
+		err = handleUninstall()
 	case "3":
-		handleStart()
+		err = handleStart()
 	case "4":
-		handleStop()
+		err = handleStop()
 	case "5":
-		handleRestart()
+		err = handleRestart()
 	case "6":
-		handleStatus()
+		err = handleStatus()
 	case "7":
-		handleLog()
+		err = handleLog()
 	case "8":
-		handleEnable()
+		err = handleEnable()
 	case "9":
-		handleDisable()
+		err = handleDisable()
 	case "10":
-		handleVersion()
+		err = handleVersion()
 	default:
 		fmt.Println("无效的选择！")
 	}
+
+	return err
 }
 
 func printUsage() {
@@ -149,71 +165,72 @@ func printUsage() {
 %s install            - 安装服务
 %s uninstall          - 卸载服务
 %s version            - 查看版本信息
+%s run                - 直接运行监控程序
 ------------------------------------------
 `, serviceName, serviceName, serviceName, serviceName, serviceName, serviceName,
-		serviceName, serviceName, serviceName, serviceName, serviceName, serviceName)
+		serviceName, serviceName, serviceName, serviceName, serviceName, serviceName, serviceName)
 }
 
-func handleStart() {
+func handleStart() error {
 	cmd := exec.Command("systemctl", "start", serviceName)
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("启动服务失败: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("启动服务失败: %v", err)
 	}
 	fmt.Println("服务已启动")
+	return nil
 }
 
-func handleStop() {
+func handleStop() error {
 	cmd := exec.Command("systemctl", "stop", serviceName)
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("停止服务失败: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("停止服务失败: %v", err)
 	}
 	fmt.Println("服务已停止")
+	return nil
 }
 
-func handleRestart() {
+func handleRestart() error {
 	cmd := exec.Command("systemctl", "restart", serviceName)
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("重启服务失败: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("重启服务失败: %v", err)
 	}
 	fmt.Println("服务已重启")
+	return nil
 }
 
-func handleStatus() {
+func handleStatus() error {
 	cmd := exec.Command("systemctl", "status", serviceName)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Run()
+	return cmd.Run()
 }
 
-func handleEnable() {
+func handleEnable() error {
 	cmd := exec.Command("systemctl", "enable", serviceName)
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("设置开机自启失败: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("设置开机自启失败: %v", err)
 	}
 	fmt.Println("已设置开机自启")
+	return nil
 }
 
-func handleDisable() {
+func handleDisable() error {
 	cmd := exec.Command("systemctl", "disable", serviceName)
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("取消开机自启失败: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("取消开机自启失败: %v", err)
 	}
 	fmt.Println("已取消开机自启")
+	return nil
 }
 
-func handleLog() {
+func handleLog() error {
 	cmd := exec.Command("journalctl", "-u", serviceName, "-f")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Run()
+	return cmd.Run()
 }
 
-func handleConfig() {
+func handleConfig() error {
 	configPath := *configFile
 	if configPath == "" {
 		configPath = defaultConfigPath
@@ -222,29 +239,32 @@ func handleConfig() {
 	// 读取并显示配置文件内容
 	content, err := os.ReadFile(configPath)
 	if err != nil {
-		fmt.Printf("读取配置文件失败: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("读取配置文件失败: %v", err)
 	}
 	fmt.Printf("配置文件内容 (%s):\n%s\n", configPath, string(content))
+	return nil
 }
 
-func handleInstall() {
+func handleInstall() error {
 	fmt.Println("正在安装服务...")
 	// 这里可以调用安装脚本或执行安装步骤
 	fmt.Println("服务安装完成")
+	return nil
 }
 
-func handleUninstall() {
+func handleUninstall() error {
 	fmt.Println("正在卸载服务...")
 	// 这里可以调用卸载脚本或执行卸载步骤
 	fmt.Println("服务卸载完成")
+	return nil
 }
 
-func handleVersion() {
+func handleVersion() error {
 	fmt.Printf("版本信息:\n")
 	fmt.Printf("  版本号: %s\n", version)
 	fmt.Printf("  构建时间: %s\n", date)
 	fmt.Printf("  提交哈希: %s\n", commit)
+	return nil
 }
 
 func getServiceStatus() string {
@@ -267,7 +287,7 @@ func isServiceEnabled() string {
 	return "否"
 }
 
-func startMonitor() {
+func startMonitor() error {
 	// 初始化配置
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -277,7 +297,7 @@ func startMonitor() {
 		// 获取配置文件的绝对路径
 		absPath, err := filepath.Abs(*configFile)
 		if err != nil {
-			panic("无法获取配置文件的绝对路径: " + err.Error())
+			return fmt.Errorf("无法获取配置文件的绝对路径: %v", err)
 		}
 		// 设置配置文件路径
 		viper.SetConfigFile(absPath)
@@ -294,7 +314,7 @@ func startMonitor() {
 	// 创建日志器
 	logger, err := config.Build()
 	if err != nil {
-		panic("failed to initialize logger: " + err.Error())
+		return fmt.Errorf("failed to initialize logger: %v", err)
 	}
 	// 确保在程序退出时同步日志
 	defer func() {
@@ -317,9 +337,7 @@ func startMonitor() {
 	)
 
 	if err := viper.ReadInConfig(); err != nil {
-		logger.Fatal("failed to read config",
-			zap.Error(err),
-		)
+		return fmt.Errorf("failed to read config: %v", err)
 	}
 
 	// 初始化飞书通知器
@@ -335,9 +353,8 @@ func startMonitor() {
 	// 启动监控
 	logger.Info("starting user session monitor")
 	if err := mon.Start(); err != nil {
-		logger.Error("monitor failed",
-			zap.Error(err),
-		)
-		os.Exit(1)
+		return fmt.Errorf("monitor failed: %v", err)
 	}
+
+	return nil
 }
