@@ -13,7 +13,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/Annihilater/user-session-monitor/internal/feishu"
+	"github.com/Annihilater/user-session-monitor/internal/event"
+	"github.com/Annihilater/user-session-monitor/internal/types"
 )
 
 // 系统认证日志文件路径
@@ -171,7 +172,7 @@ func makeLoginKey(username, ip, port string) string {
 	return fmt.Sprintf("%s:%s:%s", username, ip, port)
 }
 
-func getServerInfo() (*feishu.ServerInfo, error) {
+func getServerInfo() (*types.ServerInfo, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("获取主机名失败: %v", err)
@@ -203,7 +204,7 @@ func getServerInfo() (*feishu.ServerInfo, error) {
 		osType = "未知"
 	}
 
-	return &feishu.ServerInfo{
+	return &types.ServerInfo{
 		Hostname: hostname,
 		IP:       ip,
 		OSType:   osType,
@@ -211,16 +212,19 @@ func getServerInfo() (*feishu.ServerInfo, error) {
 }
 
 type Monitor struct {
-	logFile  string
-	notifier *feishu.Notifier
-	logger   *zap.Logger
+	logFile    string
+	eventBus   *event.EventBus
+	logger     *zap.Logger
+	stopChan   chan struct{}
+	serverInfo *types.ServerInfo
 }
 
-func NewMonitor(logFile string, notifier *feishu.Notifier, logger *zap.Logger) *Monitor {
+func NewMonitor(logFile string, eventBus *event.EventBus, logger *zap.Logger) *Monitor {
 	return &Monitor{
 		logFile:  logFile,
-		notifier: notifier,
+		eventBus: eventBus,
 		logger:   logger,
+		stopChan: make(chan struct{}),
 	}
 }
 
@@ -249,6 +253,7 @@ func (m *Monitor) Start() error {
 	if err != nil {
 		return fmt.Errorf("获取服务器信息失败: %v", err)
 	}
+	m.serverInfo = serverInfo
 	m.logger.Info("服务器信息",
 		zap.String("hostname", serverInfo.Hostname),
 		zap.String("ip", serverInfo.IP),
@@ -256,27 +261,51 @@ func (m *Monitor) Start() error {
 		zap.String("log_file", m.logFile),
 	)
 
+	// 启动监控协程
+	go m.monitor()
+
+	return nil
+}
+
+func (m *Monitor) Stop() {
+	close(m.stopChan)
+}
+
+func (m *Monitor) monitor() {
 	cmd := exec.Command("tail", "-f", m.logFile)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("创建输出管道失败: %v", err)
+		m.logger.Error("创建输出管道失败", zap.Error(err))
+		return
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("启动 tail 命令失败: %v", err)
+		m.logger.Error("启动 tail 命令失败", zap.Error(err))
+		return
 	}
+
+	// 确保在退出时关闭命令
+	defer func() {
+		if err := cmd.Process.Kill(); err != nil {
+			m.logger.Error("关闭 tail 命令失败", zap.Error(err))
+		}
+	}()
 
 	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		m.processLine(line, serverInfo)
+	for {
+		select {
+		case <-m.stopChan:
+			return
+		default:
+			if !scanner.Scan() {
+				if err := scanner.Err(); err != nil {
+					m.logger.Error("扫描日志失败", zap.Error(err))
+				}
+				return
+			}
+			m.processLine(scanner.Text())
+		}
 	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("扫描日志失败: %v", err)
-	}
-
-	return nil
 }
 
 // isRecentLogout 检查是否是最近的登出事件
@@ -322,7 +351,7 @@ func recordLogout(username, ip, port string) {
 //  2. 检测并处理多种类型的登出事件
 //  3. 维护登录记录
 //  4. 发送登录和登出通知
-func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
+func (m *Monitor) processLine(line string) {
 	// 处理登录事件
 	if matches := loginPattern.FindStringSubmatch(line); len(matches) > 0 {
 		username := matches[1]
@@ -343,19 +372,15 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 			zap.String("port", port),
 		)
 
-		if err := m.notifier.SendLoginNotification(
-			username,
-			fmt.Sprintf("%s:%s", ip, port),
-			time.Now(),
-			serverInfo,
-		); err != nil {
-			m.logger.Error("failed to send login notification",
-				zap.Error(err),
-				zap.String("username", username),
-				zap.String("ip", ip),
-				zap.String("port", port),
-			)
-		}
+		// 发布登录事件
+		m.eventBus.Publish(event.Event{
+			Type:       event.EventTypeLogin,
+			Username:   username,
+			IP:         ip,
+			Port:       port,
+			Timestamp:  time.Now(),
+			ServerInfo: m.serverInfo,
+		})
 		return
 	}
 
@@ -419,20 +444,15 @@ func (m *Monitor) processLine(line string, serverInfo *feishu.ServerInfo) {
 				zap.String("port", port),
 			)
 
-			// 发送登出通知
-			if err := m.notifier.SendLogoutNotification(
-				username,
-				fmt.Sprintf("%s:%s", ip, port),
-				time.Now(),
-				serverInfo,
-			); err != nil {
-				m.logger.Error("failed to send logout notification",
-					zap.Error(err),
-					zap.String("username", username),
-					zap.String("ip", ip),
-					zap.String("port", port),
-				)
-			}
+			// 发布登出事件
+			m.eventBus.Publish(event.Event{
+				Type:       event.EventTypeLogout,
+				Username:   username,
+				IP:         ip,
+				Port:       port,
+				Timestamp:  time.Now(),
+				ServerInfo: m.serverInfo,
+			})
 
 			// 清理登录记录
 			if username != "未知用户" && ip != "未知IP" {
