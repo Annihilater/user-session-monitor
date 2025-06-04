@@ -5,7 +5,8 @@ After=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/local/bin/user-session-monitor
+ExecStart=/usr/local/bin/user-session-monitor run -config /etc/user-session-monitor/config.yaml
+WorkingDirectory=/etc/user-session-monitor
 Restart=always
 RestartSec=10
 
