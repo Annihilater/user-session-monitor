@@ -81,12 +81,12 @@ func (nm *NetworkMonitor) monitor() {
 
 			// 记录网络状态
 			nm.logger.Info("网络状态",
-				zap.String("当前上传速度", formatSpeed(uploadSpeed)),
-				zap.String("当前下载速度", formatSpeed(downloadSpeed)),
-				zap.String("总上传量", formatBytes(currentStats.BytesSent)),
-				zap.String("总下载量", formatBytes(currentStats.BytesRecv)),
-				zap.String("上传包数", formatBytes(currentStats.PacketsSent)),
-				zap.String("下载包数", formatBytes(currentStats.PacketsRecv)),
+				zap.String("upload_speed", formatSpeed(uploadSpeed)),
+				zap.String("download_speed", formatSpeed(downloadSpeed)),
+				zap.String("total_upload", formatBytes(currentStats.BytesSent)),
+				zap.String("total_download", formatBytes(currentStats.BytesRecv)),
+				zap.String("packets_sent", formatBytes(currentStats.PacketsSent)),
+				zap.String("packets_recv", formatBytes(currentStats.PacketsRecv)),
 			)
 		}
 	}
