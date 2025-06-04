@@ -1,5 +1,5 @@
 # 声明伪目标
-.PHONY: all build clean run test check install uninstall prod dev prod-run dev-run prod-check dev-check prod-start dev-start prod-stop dev-stop prod-restart dev-restart prod-log dev-log status
+.PHONY: all build clean run test check install uninstall prod dev prod-run dev-run prod-check dev-check prod-start dev-start prod-stop dev-stop prod-restart dev-restart prod-log dev-log status prod-menu dev-menu
 
 # 项目信息
 PROJECT_NAME := user-session-monitor
@@ -60,6 +60,11 @@ log: prod-log
 # 生产环境命令
 # =====================
 
+# 生产环境菜单
+prod-menu: build
+	@echo "==> [生产环境] 显示菜单..."
+	@$(BUILD_DIR)/$(BINARY)
+
 # 生产环境运行
 prod-run: build
 	@echo "==> [生产环境] 运行 $(BINARY)..."
@@ -92,6 +97,11 @@ prod-log:
 # =====================
 # 开发环境命令
 # =====================
+
+# 开发环境菜单
+dev-menu: clean-process
+	@echo "==> [开发环境] 显示菜单..."
+	@$(GO) run $(MAIN_GO)
 
 # 开发环境运行
 dev-run: clean-process
