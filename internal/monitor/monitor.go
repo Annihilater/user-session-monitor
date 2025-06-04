@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
 	"github.com/Annihilater/user-session-monitor/internal/event"
@@ -264,12 +265,28 @@ func (m *Monitor) Start() error {
 		zap.String("log_file", m.logFile),
 	)
 
+	// 获取监控配置
+	tcpInterval := time.Duration(viper.GetInt("monitor.tcp.interval")) * time.Second
+	if tcpInterval == 0 {
+		tcpInterval = time.Second // 默认1秒
+	}
+
+	sysInterval := time.Duration(viper.GetInt("monitor.system.interval")) * time.Second
+	if sysInterval == 0 {
+		sysInterval = 5 * time.Second // 默认5秒
+	}
+
+	diskPaths := viper.GetStringSlice("monitor.system.disk_paths")
+	if len(diskPaths) == 0 {
+		diskPaths = []string{"/"} // 默认监控根目录
+	}
+
 	// 启动 TCP 监控
-	m.TCPMonitor = NewTCPMonitor(m.logger, 1*time.Second) // 每秒监控一次
+	m.TCPMonitor = NewTCPMonitor(m.logger, tcpInterval)
 	m.TCPMonitor.Start()
 
 	// 启动系统资源监控
-	m.SystemMonitor = NewSystemMonitor(m.logger, 5*time.Second, []string{"/"}) // 每5秒监控一次
+	m.SystemMonitor = NewSystemMonitor(m.logger, sysInterval, diskPaths)
 	m.SystemMonitor.Start()
 
 	// 启动监控协程
