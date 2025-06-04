@@ -228,17 +228,24 @@ func showMenu() error {
 	case "12":
 		err = handleTCPStatus()
 	default:
-		fmt.Println("无效的选择！")
+		return fmt.Errorf("无效的选择：%s", choice)
 	}
 
 	return err
 }
 
 func handleStart() error {
+	// 检查服务是否已经在运行
 	if currentMonitor != nil {
 		return fmt.Errorf("服务已经在运行中")
 	}
-	return startMonitor()
+
+	// 启动服务
+	if err := startMonitor(); err != nil {
+		return fmt.Errorf("启动服务失败: %v", err)
+	}
+
+	return nil
 }
 
 func handleStop() error {
@@ -267,14 +274,16 @@ func handleStop() error {
 	}
 
 	// 删除 PID 文件
-	os.Remove(pidFile)
+	if err := os.Remove(pidFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("删除 PID 文件失败: %v", err)
+	}
 
 	fmt.Println("服务已停止")
 	return nil
 }
 
 func handleRestart() error {
-	if err := handleStop(); err != nil {
+	if err := handleStop(); err != nil && !strings.Contains(err.Error(), "服务未运行") {
 		return fmt.Errorf("停止服务失败: %v", err)
 	}
 	return handleStart()
@@ -406,6 +415,11 @@ func isServiceEnabled() string {
 }
 
 func startMonitor() error {
+	// 如果已经在运行，返回错误
+	if currentMonitor != nil {
+		return fmt.Errorf("服务已经在运行中")
+	}
+
 	// 初始化配置
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -413,8 +427,7 @@ func startMonitor() error {
 	// 如果指定了配置文件路径，则使用指定的路径
 	if *configFile != "" {
 		// 获取配置文件的绝对路径
-		absPath, err := filepath.
-			Abs(*configFile)
+		absPath, err := filepath.Abs(*configFile)
 		if err != nil {
 			return fmt.Errorf("无法获取配置文件的绝对路径: %v", err)
 		}
@@ -438,7 +451,7 @@ func startMonitor() error {
 	// 创建日志器
 	logger, err := config.Build()
 	if err != nil {
-		return fmt.Errorf("failed to initialize logger: %v", err)
+		return fmt.Errorf("初始化日志器失败: %v", err)
 	}
 	currentLogger = logger
 
@@ -449,21 +462,22 @@ func startMonitor() error {
 			// 这是一个已知问题，可以安全地忽略
 			// 参考：https://github.com/uber-go/zap/issues/880
 			if err.Error() != "sync /dev/stderr: invalid argument" {
-				logger.Error("failed to sync logger", zap.Error(err))
+				logger.Error("同步日志失败", zap.Error(err))
 			}
 		}
 	}()
 
 	// 输出版本信息
-	logger.Info("starting user session monitor",
+	logger.Info("启动用户会话监控",
 		zap.String("version", version),
 		zap.String("commit", commit),
 		zap.String("build_date", date),
 		zap.String("config_file", viper.ConfigFileUsed()),
 	)
 
+	// 读取配置文件
 	if err := viper.ReadInConfig(); err != nil {
-		return fmt.Errorf("failed to read config: %v", err)
+		return fmt.Errorf("读取配置文件失败: %v", err)
 	}
 
 	// 创建事件总线
@@ -488,10 +502,14 @@ func startMonitor() error {
 	pid := os.Getpid()
 	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
 		logger.Error("写入PID文件失败", zap.Error(err))
+		// 不要因为PID文件写入失败就退出，只记录错误
 	}
 
 	// 启动监控器
 	if err := mon.Start(); err != nil {
+		// 如果启动失败，清理资源
+		currentMonitor = nil
+		currentNotifier = nil
 		return fmt.Errorf("启动监控器失败: %v", err)
 	}
 
@@ -507,6 +525,7 @@ func startMonitor() error {
 	// 等待退出信号
 	<-sigChan
 
+	// 优雅关闭
 	return handleStop()
 }
 
