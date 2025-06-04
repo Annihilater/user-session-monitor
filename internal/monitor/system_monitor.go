@@ -94,7 +94,7 @@ func (sm *SystemMonitor) monitor() {
 				sm.logger.Error("获取CPU使用率失败", zap.Error(err))
 			} else if len(cpuPercent) > 0 {
 				sm.logger.Info("CPU状态",
-					zap.Float64("使用率", cpuPercent[0]),
+					zap.String("使用率", fmt.Sprintf("%.2f%%", cpuPercent[0])),
 				)
 			}
 
@@ -104,18 +104,18 @@ func (sm *SystemMonitor) monitor() {
 				sm.logger.Error("获取内存信息失败", zap.Error(err))
 			} else {
 				sm.logger.Info("内存状态",
-					zap.Float64("使用率", memInfo.UsedPercent),
-					zap.Uint64("总内存", memInfo.Total),
-					zap.Uint64("已用内存", memInfo.Used),
-					zap.Uint64("可用内存", memInfo.Available),
+					zap.String("使用率", fmt.Sprintf("%.2f%%", memInfo.UsedPercent)),
+					zap.String("总内存", formatBytes(memInfo.Total)),
+					zap.String("已用内存", formatBytes(memInfo.Used)),
+					zap.String("可用内存", formatBytes(memInfo.Available)),
 				)
 			}
 
 			// 获取磁盘使用情况
 			for _, path := range sm.diskPaths {
-				diskInfo, err := disk.Usage(path)
+				usage, err := disk.Usage(path)
 				if err != nil {
-					sm.logger.Error("获取磁盘信息失败",
+					sm.logger.Error("获取磁盘使用情况失败",
 						zap.String("path", path),
 						zap.Error(err),
 					)
@@ -123,10 +123,10 @@ func (sm *SystemMonitor) monitor() {
 				}
 				sm.logger.Info("磁盘状态",
 					zap.String("路径", path),
-					zap.Float64("使用率", diskInfo.UsedPercent),
-					zap.Uint64("总空间", diskInfo.Total),
-					zap.Uint64("已用空间", diskInfo.Used),
-					zap.Uint64("可用空间", diskInfo.Free),
+					zap.String("使用率", fmt.Sprintf("%.2f%%", usage.UsedPercent)),
+					zap.String("总空间", formatBytes(usage.Total)),
+					zap.String("已用空间", formatBytes(usage.Used)),
+					zap.String("可用空间", formatBytes(usage.Free)),
 				)
 			}
 
