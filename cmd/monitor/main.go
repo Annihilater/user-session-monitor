@@ -35,6 +35,65 @@ const (
 	serviceName       = "user-session-monitor"
 )
 
+func init() {
+	// 自定义帮助信息
+	flag.Usage = func() {
+		fmt.Printf(`用户会话监控 - 监控 Linux 服务器上的用户登录和登出事件
+
+用法:
+  %s [命令] [参数]
+
+命令:
+  run                - 直接运行监控程序
+  start              - 启动系统服务
+  stop               - 停止系统服务
+  restart            - 重启系统服务
+  status             - 查看服务状态
+  enable             - 设置开机自启
+  disable            - 取消开机自启
+  log                - 查看服务日志
+  config             - 显示配置文件内容
+  install            - 安装服务
+  uninstall          - 卸载服务
+  version            - 查看版本信息
+
+参数:
+  -h, --help         显示帮助信息
+  -config string     配置文件路径（默认为 /etc/user-session-monitor/config.yaml）
+
+管理菜单功能:
+  0. 修改配置        - 查看和编辑配置文件
+  1. 安装服务        - 安装系统服务
+  2. 卸载服务        - 卸载系统服务
+  3. 启动服务        - 启动系统服务
+  4. 停止服务        - 停止系统服务
+  5. 重启服务        - 重启系统服务
+  6. 查看服务状态     - 显示服务运行状态
+  7. 查看服务日志     - 实时查看服务日志
+  8. 设置开机自启     - 设置服务开机自动启动
+  9. 取消开机自启     - 取消服务开机自动启动
+  10. 查看版本信息    - 显示版本、构建信息
+
+示例:
+  # 显示管理菜单（默认）
+  %s
+
+  # 使用自定义配置文件运行监控
+  %s run -config /path/to/config.yaml
+
+  # 启动系统服务
+  %s start
+
+  # 查看服务日志
+  %s log
+
+更多信息:
+  项目主页: https://github.com/Annihilater/user-session-monitor
+  问题反馈: https://github.com/Annihilater/user-session-monitor/issues
+`, serviceName, serviceName, serviceName, serviceName, serviceName)
+	}
+}
+
 func main() {
 	// 解析命令行参数
 	flag.Parse()
@@ -42,9 +101,9 @@ func main() {
 	// 获取子命令
 	args := flag.Args()
 	if len(args) == 0 {
-		// 如果没有参数，直接运行监控程序
-		if err := startMonitor(); err != nil {
-			fmt.Printf("启动监控失败: %v\n", err)
+		// 如果没有参数，显示菜单
+		if err := showMenu(); err != nil {
+			fmt.Printf("执行命令失败: %v\n", err)
 			os.Exit(1)
 		}
 		return
@@ -54,9 +113,8 @@ func main() {
 	cmd := strings.ToLower(args[0])
 	var err error
 	switch cmd {
-	case "menu":
-		// 添加 menu 命令来显示菜单
-		err = showMenu()
+	case "run":
+		err = startMonitor()
 	case "start":
 		err = handleStart()
 	case "stop":
@@ -79,11 +137,9 @@ func main() {
 		err = handleUninstall()
 	case "version":
 		err = handleVersion()
-	case "run":
-		err = startMonitor() // 添加 run 命令来启动监控
 	default:
 		fmt.Printf("未知的命令: %s\n", args[0])
-		printUsage()
+		flag.Usage()
 		os.Exit(1)
 	}
 
@@ -156,29 +212,6 @@ func showMenu() error {
 	}
 
 	return err
-}
-
-func printUsage() {
-	fmt.Printf(`用户会话监控管理命令使用说明:
-------------------------------------------
-%s                    - 直接启动监控程序
-%s menu              - 显示管理菜单
-%s start             - 启动服务
-%s stop              - 停止服务
-%s restart           - 重启服务
-%s status            - 查看服务状态
-%s enable            - 设置开机自启
-%s disable           - 取消开机自启
-%s log               - 查看服务日志
-%s config            - 显示配置文件内容
-%s install           - 安装服务
-%s uninstall         - 卸载服务
-%s version           - 查看版本信息
-%s run               - 直接运行监控程序
-------------------------------------------
-`, serviceName, serviceName, serviceName, serviceName, serviceName, serviceName,
-		serviceName, serviceName, serviceName, serviceName, serviceName, serviceName,
-		serviceName, serviceName)
 }
 
 func handleStart() error {
