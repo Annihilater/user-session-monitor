@@ -90,3 +90,8 @@ func formatSpeed(bytesPerSec float64) string {
 
 	return fmt.Sprintf("%.2f %s", value, unit)
 }
+
+// formatPercent 将数值转换为百分比格式
+func formatPercent(value float64) string {
+	return fmt.Sprintf("%.2f%%", value)
+}
