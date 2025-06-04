@@ -14,3 +14,7 @@ monitor:
       - "/"
   tcp:
     interval: 0.5 # TCP 监控间隔（秒）
+  hardware:
+    interval: 3600 # 硬件信息监控间隔（秒，默认1小时）
+    disk_paths: # 要监控的磁盘路径列表
+      - "/"
