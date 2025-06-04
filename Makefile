@@ -1,4 +1,4 @@
-.PHONY: build clean run install test
+.PHONY: build clean run install test check start stop restart log
 
 # 二进制文件名
 BINARY=user-session-monitor
@@ -27,6 +27,26 @@ build:
 # 构建并运行
 run: build
 	./$(BINARY)
+
+# 检查服务状态
+check: build
+	./$(BINARY) check
+
+# 启动服务
+start: build
+	./$(BINARY) start
+
+# 停止服务
+stop:
+	./$(BINARY) stop
+
+# 重启服务
+restart: build
+	./$(BINARY) restart
+
+# 查看服务日志
+log:
+	./$(BINARY) log
 
 # 清理构建产物
 clean:
