@@ -2,8 +2,11 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -20,13 +23,149 @@ var (
 	date    = "unknown"
 
 	// 命令行参数
-	configFile = flag.String("config", "", "配置文件路径，默认为 config/config.yaml")
+	configFile = flag.String("config", "", "配置文件路径，默认为 /etc/user-session-monitor/config.yaml")
+)
+
+const (
+	defaultConfigPath = "/etc/user-session-monitor/config.yaml"
+	serviceName       = "user-session-monitor"
 )
 
 func main() {
 	// 解析命令行参数
 	flag.Parse()
 
+	// 获取子命令
+	args := flag.Args()
+	if len(args) > 0 {
+		switch args[0] {
+		case "start":
+			handleStart()
+		case "stop":
+			handleStop()
+		case "restart":
+			handleRestart()
+		case "log":
+			handleLog()
+		case "info":
+			handleInfo()
+		default:
+			fmt.Printf("未知的命令: %s\n", args[0])
+			printUsage()
+			os.Exit(1)
+		}
+		return
+	}
+
+	// 如果没有子命令，则启动监控程序
+	startMonitor()
+}
+
+func printUsage() {
+	fmt.Printf(`用法: %s <命令>
+
+可用命令:
+  start    启动服务
+  stop     停止服务
+  restart  重启服务
+  log      查看服务日志
+  info     查看服务状态和配置信息
+
+选项:
+  -config string   配置文件路径（默认为 /etc/user-session-monitor/config.yaml）
+
+示例:
+  %s start
+  %s -config /custom/path/config.yaml start
+`, serviceName, serviceName, serviceName)
+}
+
+func handleStart() {
+	cmd := exec.Command("systemctl", "start", serviceName)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("启动服务失败: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("服务已启动")
+}
+
+func handleStop() {
+	cmd := exec.Command("systemctl", "stop", serviceName)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("停止服务失败: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("服务已停止")
+}
+
+func handleRestart() {
+	cmd := exec.Command("systemctl", "restart", serviceName)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("重启服务失败: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("服务已重启")
+}
+
+func handleLog() {
+	cmd := exec.Command("journalctl", "-u", serviceName, "-f")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("查看日志失败: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func handleInfo() {
+	// 检查服务状态
+	status := exec.Command("systemctl", "is-active", serviceName)
+	statusOutput, _ := status.Output()
+	isActive := strings.TrimSpace(string(statusOutput)) == "active"
+
+	// 获取进程 ID
+	var pid string
+	if isActive {
+		pidCmd := exec.Command("systemctl", "show", "--property=MainPID", serviceName)
+		pidOutput, _ := pidCmd.Output()
+		pid = strings.TrimPrefix(strings.TrimSpace(string(pidOutput)), "MainPID=")
+	}
+
+	// 获取配置文件路径
+	configPath := *configFile
+	if configPath == "" {
+		configPath = defaultConfigPath
+	}
+
+	// 输出信息
+	fmt.Printf("服务信息:\n")
+	fmt.Printf("  版本: %s\n", version)
+	fmt.Printf("  构建时间: %s\n", date)
+	fmt.Printf("  提交哈希: %s\n", commit)
+	fmt.Printf("  状态: %s\n", strings.TrimSpace(string(statusOutput)))
+	if pid != "" && pid != "0" {
+		fmt.Printf("  进程ID: %s\n", pid)
+	}
+	fmt.Printf("  配置文件: %s\n", configPath)
+
+	// 如果服务正在运行，尝试读取并显示配置内容
+	if isActive {
+		viper.Reset()
+		viper.SetConfigFile(configPath)
+		if err := viper.ReadInConfig(); err == nil {
+			fmt.Printf("\n配置内容:\n")
+			fmt.Printf("  日志文件: %s\n", viper.GetString("monitor.log_file"))
+			webhookURL := viper.GetString("feishu.webhook_url")
+			if webhookURL != "" {
+				// 隐藏 webhook URL 的大部分内容
+				maskedURL := webhookURL[:10] + "..." + webhookURL[len(webhookURL)-10:]
+				fmt.Printf("  飞书 Webhook: %s\n", maskedURL)
+			}
+		}
+	}
+}
+
+func startMonitor() {
 	// 初始化配置
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -42,7 +181,7 @@ func main() {
 		viper.SetConfigFile(absPath)
 	} else {
 		// 使用默认配置文件路径
-		viper.AddConfigPath("config")
+		viper.SetConfigFile(defaultConfigPath)
 	}
 
 	// 初始化日志配置
