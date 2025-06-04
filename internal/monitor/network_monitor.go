@@ -154,8 +154,8 @@ func (nm *NetworkMonitor) monitor() {
 				zap.String("当前下载速度", formatSpeed(downloadSpeed)),
 				zap.String("总上传量", formatBytes(currentStats.BytesSent)),
 				zap.String("总下载量", formatBytes(currentStats.BytesRecv)),
-				zap.Uint64("上传包数", currentStats.PacketsSent),
-				zap.Uint64("下载包数", currentStats.PacketsRecv),
+				zap.String("上传包数", formatBytes(currentStats.PacketsSent)),
+				zap.String("下载包数", formatBytes(currentStats.PacketsRecv)),
 			)
 		}
 	}
