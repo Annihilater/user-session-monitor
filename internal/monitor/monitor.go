@@ -266,20 +266,39 @@ func (m *Monitor) Start() error {
 	)
 
 	// 获取监控配置
-	tcpInterval := time.Duration(viper.GetInt("monitor.tcp.interval")) * time.Second
-	if tcpInterval == 0 {
-		tcpInterval = time.Second // 默认1秒
+	tcpIntervalFloat := viper.GetFloat64("monitor.tcp.interval")
+	sysIntervalFloat := viper.GetFloat64("monitor.system.interval")
+
+	// 记录读取到的配置
+	m.logger.Info("读取监控配置",
+		zap.Float64("tcp_interval_seconds", tcpIntervalFloat),
+		zap.Float64("system_interval_seconds", sysIntervalFloat),
+	)
+
+	// 转换为 Duration
+	tcpInterval := time.Duration(tcpIntervalFloat * float64(time.Second))
+	if tcpInterval < 100*time.Millisecond {
+		tcpInterval = time.Second // 默认1秒，最小100毫秒
+		m.logger.Warn("TCP监控间隔太小，使用默认值", zap.Duration("interval", tcpInterval))
 	}
 
-	sysInterval := time.Duration(viper.GetInt("monitor.system.interval")) * time.Second
-	if sysInterval == 0 {
-		sysInterval = 5 * time.Second // 默认5秒
+	sysInterval := time.Duration(sysIntervalFloat * float64(time.Second))
+	if sysInterval < 100*time.Millisecond {
+		sysInterval = 5 * time.Second // 默认5秒，最小100毫秒
+		m.logger.Warn("系统监控间隔太小，使用默认值", zap.Duration("interval", sysInterval))
 	}
 
 	diskPaths := viper.GetStringSlice("monitor.system.disk_paths")
 	if len(diskPaths) == 0 {
 		diskPaths = []string{"/"} // 默认监控根目录
 	}
+
+	// 记录最终使用的配置
+	m.logger.Info("使用监控配置",
+		zap.Duration("tcp_interval", tcpInterval),
+		zap.Duration("system_interval", sysInterval),
+		zap.Strings("disk_paths", diskPaths),
+	)
 
 	// 启动 TCP 监控
 	m.TCPMonitor = NewTCPMonitor(m.logger, tcpInterval)

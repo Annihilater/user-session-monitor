@@ -443,6 +443,11 @@ func startMonitor() error {
 		}
 	}
 
+	// 读取配置文件
+	if err := viper.ReadInConfig(); err != nil {
+		return fmt.Errorf("读取配置文件失败: %v", err)
+	}
+
 	// 初始化日志配置
 	config := zap.NewProductionConfig()
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
@@ -467,7 +472,7 @@ func startMonitor() error {
 		}
 	}()
 
-	// 输出版本信息
+	// 输出版本和配置信息
 	logger.Info("启动用户会话监控",
 		zap.String("version", version),
 		zap.String("commit", commit),
@@ -475,10 +480,11 @@ func startMonitor() error {
 		zap.String("config_file", viper.ConfigFileUsed()),
 	)
 
-	// 读取配置文件
-	if err := viper.ReadInConfig(); err != nil {
-		return fmt.Errorf("读取配置文件失败: %v", err)
-	}
+	// 输出配置内容
+	logger.Info("当前配置",
+		zap.Any("monitor", viper.Get("monitor")),
+		zap.Any("feishu", viper.Get("feishu")),
+	)
 
 	// 创建事件总线
 	eventBus := event.NewEventBus(100) // 设置适当的缓冲区大小
