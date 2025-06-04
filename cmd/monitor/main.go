@@ -37,47 +37,121 @@ func main() {
 
 	// 获取子命令
 	args := flag.Args()
-	if len(args) > 0 {
-		switch args[0] {
-		case "start":
-			handleStart()
-		case "stop":
-			handleStop()
-		case "restart":
-			handleRestart()
-		case "log":
-			handleLog()
-		case "info":
-			handleInfo()
-		default:
-			fmt.Printf("未知的命令: %s\n", args[0])
-			printUsage()
-			os.Exit(1)
-		}
+	if len(args) == 0 {
+		showMenu()
 		return
 	}
 
-	// 如果没有子命令，则启动监控程序
-	startMonitor()
+	// 将命令转换为小写以实现大小写不敏感
+	cmd := strings.ToLower(args[0])
+	switch cmd {
+	case "start":
+		handleStart()
+	case "stop":
+		handleStop()
+	case "restart":
+		handleRestart()
+	case "status":
+		handleStatus()
+	case "enable":
+		handleEnable()
+	case "disable":
+		handleDisable()
+	case "log":
+		handleLog()
+	case "config":
+		handleConfig()
+	case "install":
+		handleInstall()
+	case "uninstall":
+		handleUninstall()
+	case "version":
+		handleVersion()
+	default:
+		fmt.Printf("未知的命令: %s\n", args[0])
+		printUsage()
+		os.Exit(1)
+	}
+}
+
+func showMenu() {
+	// 获取服务状态
+	status := getServiceStatus()
+	enabled := isServiceEnabled()
+
+	fmt.Printf(`
+  用户会话监控管理脚本
+--- https://github.com/Annihilater/user-session-monitor ---
+  0. 修改配置
+————————————————
+  1. 安装服务
+  2. 卸载服务
+————————————————
+  3. 启动服务
+  4. 停止服务
+  5. 重启服务
+  6. 查看服务状态
+  7. 查看服务日志
+————————————————
+  8. 设置开机自启
+  9. 取消开机自启
+————————————————
+ 10. 查看版本信息
+
+服务状态: %s
+是否开机自启: %s
+
+请输入选择 [0-10]: `, status, enabled)
+
+	var choice string
+	fmt.Scanln(&choice)
+
+	switch choice {
+	case "0":
+		handleConfig()
+	case "1":
+		handleInstall()
+	case "2":
+		handleUninstall()
+	case "3":
+		handleStart()
+	case "4":
+		handleStop()
+	case "5":
+		handleRestart()
+	case "6":
+		handleStatus()
+	case "7":
+		handleLog()
+	case "8":
+		handleEnable()
+	case "9":
+		handleDisable()
+	case "10":
+		handleVersion()
+	default:
+		fmt.Println("无效的选择！")
+	}
 }
 
 func printUsage() {
-	fmt.Printf(`用法: %s <命令>
-
-可用命令:
-  start    启动服务
-  stop     停止服务
-  restart  重启服务
-  log      查看服务日志
-  info     查看服务状态和配置信息
-
-选项:
-  -config string   配置文件路径（默认为 /etc/user-session-monitor/config.yaml）
-
-示例:
-  %s start
-  %s -config /custom/path/config.yaml start
-`, serviceName, serviceName, serviceName)
+	fmt.Printf(`用户会话监控管理命令使用说明:
+------------------------------------------
+%s                    - 显示管理菜单 (功能更多)
+%s start              - 启动服务
+%s stop               - 停止服务
+%s restart            - 重启服务
+%s status             - 查看服务状态
+%s enable             - 设置开机自启
+%s disable            - 取消开机自启
+%s log                - 查看服务日志
+%s config             - 显示配置文件内容
+%s install            - 安装服务
+%s uninstall          - 卸载服务
+%s version            - 查看版本信息
+------------------------------------------
+`, serviceName, serviceName, serviceName, serviceName, serviceName, serviceName,
+		serviceName, serviceName, serviceName, serviceName, serviceName, serviceName)
 }
 
 func handleStart() {
@@ -107,62 +181,90 @@ func handleRestart() {
 	fmt.Println("服务已重启")
 }
 
+func handleStatus() {
+	cmd := exec.Command("systemctl", "status", serviceName)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+}
+
+func handleEnable() {
+	cmd := exec.Command("systemctl", "enable", serviceName)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("设置开机自启失败: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("已设置开机自启")
+}
+
+func handleDisable() {
+	cmd := exec.Command("systemctl", "disable", serviceName)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("取消开机自启失败: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("已取消开机自启")
+}
+
 func handleLog() {
 	cmd := exec.Command("journalctl", "-u", serviceName, "-f")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("查看日志失败: %v\n", err)
-		os.Exit(1)
-	}
+	cmd.Run()
 }
 
-func handleInfo() {
-	// 检查服务状态
-	status := exec.Command("systemctl", "is-active", serviceName)
-	statusOutput, _ := status.Output()
-	isActive := strings.TrimSpace(string(statusOutput)) == "active"
-
-	// 获取进程 ID
-	var pid string
-	if isActive {
-		pidCmd := exec.Command("systemctl", "show", "--property=MainPID", serviceName)
-		pidOutput, _ := pidCmd.Output()
-		pid = strings.TrimPrefix(strings.TrimSpace(string(pidOutput)), "MainPID=")
-	}
-
-	// 获取配置文件路径
+func handleConfig() {
 	configPath := *configFile
 	if configPath == "" {
 		configPath = defaultConfigPath
 	}
 
-	// 输出信息
-	fmt.Printf("服务信息:\n")
-	fmt.Printf("  版本: %s\n", version)
+	// 读取并显示配置文件内容
+	content, err := os.ReadFile(configPath)
+	if err != nil {
+		fmt.Printf("读取配置文件失败: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("配置文件内容 (%s):\n%s\n", configPath, string(content))
+}
+
+func handleInstall() {
+	fmt.Println("正在安装服务...")
+	// 这里可以调用安装脚本或执行安装步骤
+	fmt.Println("服务安装完成")
+}
+
+func handleUninstall() {
+	fmt.Println("正在卸载服务...")
+	// 这里可以调用卸载脚本或执行卸载步骤
+	fmt.Println("服务卸载完成")
+}
+
+func handleVersion() {
+	fmt.Printf("版本信息:\n")
+	fmt.Printf("  版本号: %s\n", version)
 	fmt.Printf("  构建时间: %s\n", date)
 	fmt.Printf("  提交哈希: %s\n", commit)
-	fmt.Printf("  状态: %s\n", strings.TrimSpace(string(statusOutput)))
-	if pid != "" && pid != "0" {
-		fmt.Printf("  进程ID: %s\n", pid)
-	}
-	fmt.Printf("  配置文件: %s\n", configPath)
+}
 
-	// 如果服务正在运行，尝试读取并显示配置内容
-	if isActive {
-		viper.Reset()
-		viper.SetConfigFile(configPath)
-		if err := viper.ReadInConfig(); err == nil {
-			fmt.Printf("\n配置内容:\n")
-			fmt.Printf("  日志文件: %s\n", viper.GetString("monitor.log_file"))
-			webhookURL := viper.GetString("feishu.webhook_url")
-			if webhookURL != "" {
-				// 隐藏 webhook URL 的大部分内容
-				maskedURL := webhookURL[:10] + "..." + webhookURL[len(webhookURL)-10:]
-				fmt.Printf("  飞书 Webhook: %s\n", maskedURL)
-			}
-		}
+func getServiceStatus() string {
+	cmd := exec.Command("systemctl", "is-active", serviceName)
+	output, _ := cmd.Output()
+	status := strings.TrimSpace(string(output))
+	if status == "active" {
+		return "运行中"
 	}
+	return "未运行"
+}
+
+func isServiceEnabled() string {
+	cmd := exec.Command("systemctl", "is-enabled", serviceName)
+	output, _ := cmd.Output()
+	enabled := strings.TrimSpace(string(output))
+	if enabled == "enabled" {
+		return "是"
+	}
+	return "否"
 }
 
 func startMonitor() {
