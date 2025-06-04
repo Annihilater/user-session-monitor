@@ -63,7 +63,7 @@ log: prod-log
 # 生产环境菜单
 prod-menu: build
 	@echo "==> [生产环境] 显示菜单..."
-	@$(BUILD_DIR)/$(BINARY)
+	@$(BUILD_DIR)/$(BINARY) menu
 
 # 生产环境运行
 prod-run: build
@@ -101,7 +101,7 @@ prod-log:
 # 开发环境菜单
 dev-menu: clean-process
 	@echo "==> [开发环境] 显示菜单..."
-	@$(GO) run $(MAIN_GO)
+	@$(GO) run $(MAIN_GO) menu
 
 # 开发环境运行
 dev-run: clean-process
