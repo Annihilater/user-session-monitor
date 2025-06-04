@@ -36,6 +36,7 @@ var (
 const (
 	defaultConfigPath = "/etc/user-session-monitor/config.yaml"
 	serviceName       = "user-session-monitor"
+	pidFile           = "/var/run/user-session-monitor.pid"
 )
 
 func init() {
@@ -59,6 +60,7 @@ func init() {
   install            - 安装服务
   uninstall          - 卸载服务
   version            - 查看版本信息
+  check              - 检查服务运行状态
 
 参数:
   -h, --help         显示帮助信息
@@ -76,6 +78,7 @@ func init() {
   8. 设置开机自启     - 设置服务开机自动启动
   9. 取消开机自启     - 取消服务开机自动启动
   10. 查看版本信息    - 显示版本、构建信息
+  11. 检查运行状态    - 显示详细的运行状态
 
 示例:
   # 显示管理菜单（默认）
@@ -90,10 +93,13 @@ func init() {
   # 查看服务日志
   %s log
 
+  # 检查服务运行状态
+  %s check
+
 更多信息:
   项目主页: https://github.com/Annihilater/user-session-monitor
   问题反馈: https://github.com/Annihilater/user-session-monitor/issues
-`, serviceName, serviceName, serviceName, serviceName, serviceName)
+`, serviceName, serviceName, serviceName, serviceName, serviceName, serviceName)
 	}
 }
 
@@ -140,6 +146,8 @@ func main() {
 		err = handleUninstall()
 	case "version":
 		err = handleVersion()
+	case "check":
+		err = handleCheck()
 	default:
 		fmt.Printf("未知的命令: %s\n", args[0])
 		flag.Usage()
@@ -175,11 +183,12 @@ func showMenu() error {
   9. 取消开机自启
 ————————————————
  10. 查看版本信息
+ 11. 检查运行状态
 
 服务状态: %s
 是否开机自启: %s
 
-请输入选择 [0-10]: `, status, enabled)
+请输入选择 [0-11]: `, status, enabled)
 
 	var choice string
 	if _, err := fmt.Scanln(&choice); err != nil {
@@ -210,6 +219,8 @@ func showMenu() error {
 		err = handleDisable()
 	case "10":
 		err = handleVersion()
+	case "11":
+		err = handleCheck()
 	default:
 		fmt.Println("无效的选择！")
 	}
@@ -245,10 +256,32 @@ func handleRestart() error {
 }
 
 func handleStatus() error {
+	// 检查服务是否在运行
 	cmd := exec.Command("systemctl", "status", serviceName)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("获取服务状态失败: %v", err)
+	}
+
+	// 获取进程信息
+	if _, err := os.Stat(pidFile); err == nil {
+		pidBytes, err := os.ReadFile(pidFile)
+		if err != nil {
+			return fmt.Errorf("读取PID文件失败: %v", err)
+		}
+		pid := strings.TrimSpace(string(pidBytes))
+
+		// 获取进程详细信息
+		cmd = exec.Command("ps", "-p", pid, "-o", "pid,ppid,user,%cpu,%mem,etime,command")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("获取进程信息失败: %v", err)
+		}
+	}
+
+	return nil
 }
 
 func handleEnable() error {
@@ -310,6 +343,32 @@ func handleVersion() error {
 	fmt.Printf("  版本号: %s\n", version)
 	fmt.Printf("  构建时间: %s\n", date)
 	fmt.Printf("  提交哈希: %s\n", commit)
+	return nil
+}
+
+func handleCheck() error {
+	// 检查服务状态
+	fmt.Println("\n=== 服务状态 ===")
+	if err := handleStatus(); err != nil {
+		fmt.Printf("获取服务状态失败: %v\n", err)
+	}
+
+	// 检查日志文件
+	fmt.Println("\n=== 日志文件状态 ===")
+	logFile := "/var/log/user-session-monitor.log"
+	if stat, err := os.Stat(logFile); err == nil {
+		fmt.Printf("日志文件大小: %d 字节\n", stat.Size())
+		fmt.Printf("最后修改时间: %s\n", stat.ModTime().Format("2006-01-02 15:04:05"))
+	} else {
+		fmt.Printf("日志文件不存在: %v\n", err)
+	}
+
+	// 检查配置文件
+	fmt.Println("\n=== 配置文件状态 ===")
+	if err := handleConfig(); err != nil {
+		fmt.Printf("获取配置文件状态失败: %v\n", err)
+	}
+
 	return nil
 }
 
@@ -401,6 +460,13 @@ func startMonitor() error {
 		viper.GetString("feishu.webhook_url"),
 		logger,
 	)
+
+	// 写入PID文件
+	pid := os.Getpid()
+	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
+		logger.Error("写入PID文件失败", zap.Error(err))
+	}
+	defer os.Remove(pidFile)
 
 	// 启动监控器
 	if err := mon.Start(); err != nil {
