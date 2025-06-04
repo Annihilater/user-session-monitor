@@ -419,8 +419,13 @@ func startMonitor() error {
 		// 设置配置文件路径
 		viper.SetConfigFile(absPath)
 	} else {
-		// 使用默认配置文件路径
-		viper.SetConfigFile(defaultConfigPath)
+		// 检查是否在源码目录下运行（通过检查 config/config.yaml 是否存在）
+		if _, err := os.Stat("config/config.yaml"); err == nil {
+			viper.SetConfigFile("config/config.yaml")
+		} else {
+			// 如果不在源码目录，则使用默认配置文件路径
+			viper.SetConfigFile(defaultConfigPath)
+		}
 	}
 
 	// 初始化日志配置
