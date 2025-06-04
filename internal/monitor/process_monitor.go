@@ -1,21 +1,24 @@
 package monitor
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
+	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
 	"go.uber.org/zap"
 )
 
 // ProcessInfo 进程信息
 type ProcessInfo struct {
-	PID         int32
-	Name        string
-	CPUPercent  float64
-	MemoryUsage uint64
-	Username    string
-	CreateTime  time.Time
+	PID           int32
+	Name          string
+	CPUPercent    float64
+	MemoryUsage   uint64
+	MemoryPercent float32
+	Username      string
+	CreateTime    time.Time
 }
 
 // ProcessMonitor 进程监控器
@@ -51,6 +54,13 @@ func (pm *ProcessMonitor) getTopProcesses(count int) ([]ProcessInfo, error) {
 		return nil, err
 	}
 
+	// 获取系统总内存
+	memInfo, err := mem.VirtualMemory()
+	if err != nil {
+		return nil, err
+	}
+	totalMem := memInfo.Total
+
 	var processInfos []ProcessInfo
 	for _, p := range processes {
 		name, err := p.Name()
@@ -78,13 +88,17 @@ func (pm *ProcessMonitor) getTopProcesses(count int) ([]ProcessInfo, error) {
 			createTime = 0
 		}
 
+		// 计算内存使用百分比
+		memPercent := float32(mem.RSS) / float32(totalMem) * 100
+
 		processInfos = append(processInfos, ProcessInfo{
-			PID:         p.Pid,
-			Name:        name,
-			CPUPercent:  cpu,
-			MemoryUsage: mem.RSS,
-			Username:    username,
-			CreateTime:  time.Unix(createTime/1000, 0),
+			PID:           p.Pid,
+			Name:          name,
+			CPUPercent:    cpu,
+			MemoryUsage:   mem.RSS,
+			MemoryPercent: memPercent,
+			Username:      username,
+			CreateTime:    time.Unix(createTime/1000, 0),
 		})
 	}
 
@@ -138,7 +152,8 @@ func (pm *ProcessMonitor) monitor() {
 					zap.Int32("PID", proc.PID),
 					zap.String("名称", proc.Name),
 					zap.Float64("CPU占用", proc.CPUPercent),
-					zap.Uint64("内存占用", proc.MemoryUsage),
+					zap.String("内存占用", formatBytes(proc.MemoryUsage)),
+					zap.String("内存占用率", fmt.Sprintf("%.2f%%", proc.MemoryPercent)),
 					zap.String("用户", proc.Username),
 					zap.Time("创建时间", proc.CreateTime),
 				)
