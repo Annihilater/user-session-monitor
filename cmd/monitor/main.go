@@ -412,7 +412,8 @@ func startMonitor() error {
 	// 如果指定了配置文件路径，则使用指定的路径
 	if *configFile != "" {
 		// 获取配置文件的绝对路径
-		absPath, err := filepath.Abs(*configFile)
+		absPath, err := filepath.
+			Abs(*configFile)
 		if err != nil {
 			return fmt.Errorf("无法获取配置文件的绝对路径: %v", err)
 		}
