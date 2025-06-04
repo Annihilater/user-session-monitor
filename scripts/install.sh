@@ -17,7 +17,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # 设置变量
-VERSION="v1.2.2"
+VERSION="v1.2.3"
 ARCH=$(uname -m)
 BINARY_NAME="user-session-monitor"
 INSTALL_DIR="/usr/local/bin"
@@ -98,10 +98,24 @@ feishu:
   webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url"
 
 monitor:
-  # Debian/Ubuntu 使用 /var/log/auth.log
-  # CentOS/RHEL/Amazon Linux 使用 /var/log/secure
-  # SUSE 使用 /var/log/messages
+  # 认证日志文件路径
+  # Debian/Ubuntu: /var/log/auth.log
+  # CentOS/RHEL: /var/log/secure
+  # Amazon Linux: /var/log/secure
+  # SUSE: /var/log/messages
   log_file: "/var/log/auth.log"
+  system:
+    interval: 0.5 # 系统监控间隔（秒）
+    disk_paths: # 要监控的磁盘路径列表
+      - "/"
+  tcp:
+    interval: 0.5 # TCP 监控间隔（秒）
+  hardware:
+    interval: 3600 # 硬件信息监控间隔（秒，默认1小时）
+    disk_paths: # 要监控的磁盘路径列表
+      - "/"
+  heartbeat:
+    interval: 0.5 # 心跳监控间隔（秒）
 EOF
     if [ $? -ne 0 ]; then
         error "创建配置文件失败"
