@@ -1,7 +1,6 @@
 package monitor
 
 import (
-	"fmt"
 	"sort"
 	"time"
 
@@ -151,9 +150,9 @@ func (pm *ProcessMonitor) monitor() {
 					zap.Int("proc_rank", i+1),
 					zap.Int32("proc_pid", proc.PID),
 					zap.String("proc_name", proc.Name),
-					zap.Float64("proc_cpu_percent", proc.CPUPercent),
+					zap.String("proc_cpu_percent", formatPercent(proc.CPUPercent)),
 					zap.String("proc_memory_usage", formatBytes(proc.MemoryUsage)),
-					zap.String("proc_memory_percent", fmt.Sprintf("%.2f%%", proc.MemoryPercent)),
+					zap.String("proc_memory_percent", formatPercent(float64(proc.MemoryPercent))),
 					zap.String("proc_user", proc.Username),
 					zap.Time("proc_create_time", proc.CreateTime),
 				)
