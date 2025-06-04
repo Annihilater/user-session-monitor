@@ -12,41 +12,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// 定义容量单位
-const (
-	B  = 1
-	KB = 1024 * B
-	MB = 1024 * KB
-	GB = 1024 * MB
-	TB = 1024 * GB
-)
-
-// formatSize 格式化字节大小为人类可读格式
-func formatSize(bytes uint64) (float64, string) {
-	switch {
-	case bytes >= TB:
-		return float64(bytes) / TB, "TB"
-	case bytes >= GB:
-		return float64(bytes) / GB, "GB"
-	case bytes >= MB:
-		return float64(bytes) / MB, "MB"
-	case bytes >= KB:
-		return float64(bytes) / KB, "KB"
-	default:
-		return float64(bytes), "B"
-	}
-}
-
-// formatUptime 格式化运行时间
-func formatUptime(uptime time.Duration) string {
-	days := int(uptime.Hours()) / 24
-	hours := int(uptime.Hours()) % 24
-	minutes := int(uptime.Minutes()) % 60
-	seconds := int(uptime.Seconds()) % 60
-
-	return fmt.Sprintf("%d天%d小时%d分钟%d秒", days, hours, minutes, seconds)
-}
-
 // SystemMonitor 系统监控器
 type SystemMonitor struct {
 	logger    *zap.Logger
