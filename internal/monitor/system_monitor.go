@@ -1,10 +1,13 @@
 package monitor
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/host"
+	"github.com/shirou/gopsutil/v3/load"
 	"github.com/shirou/gopsutil/v3/mem"
 	"go.uber.org/zap"
 )
@@ -34,7 +37,17 @@ func formatSize(bytes uint64) (float64, string) {
 	}
 }
 
-// SystemMonitor 系统资源监控器
+// formatUptime 格式化运行时间
+func formatUptime(uptime time.Duration) string {
+	days := int(uptime.Hours()) / 24
+	hours := int(uptime.Hours()) % 24
+	minutes := int(uptime.Minutes()) % 60
+	seconds := int(uptime.Seconds()) % 60
+
+	return fmt.Sprintf("%d天%d小时%d分钟%d秒", days, hours, minutes, seconds)
+}
+
+// SystemMonitor 系统监控器
 type SystemMonitor struct {
 	logger    *zap.Logger
 	interval  time.Duration
@@ -42,7 +55,7 @@ type SystemMonitor struct {
 	diskPaths []string // 要监控的磁盘路径列表
 }
 
-// NewSystemMonitor 创建新的系统资源监控器
+// NewSystemMonitor 创建新的系统监控器
 func NewSystemMonitor(logger *zap.Logger, interval time.Duration, diskPaths []string) *SystemMonitor {
 	if len(diskPaths) == 0 {
 		diskPaths = []string{"/"} // 默认监控根目录
@@ -55,20 +68,18 @@ func NewSystemMonitor(logger *zap.Logger, interval time.Duration, diskPaths []st
 	}
 }
 
-// Start 启动系统资源监控
+// Start 启动系统监控
 func (sm *SystemMonitor) Start() {
-	go sm.monitorCPU()
-	go sm.monitorMemory()
-	go sm.monitorDisk()
+	go sm.monitor()
 }
 
-// Stop 停止系统资源监控
+// Stop 停止系统监控
 func (sm *SystemMonitor) Stop() {
 	close(sm.stopChan)
 }
 
-// monitorCPU CPU 使用率监控
-func (sm *SystemMonitor) monitorCPU() {
+// monitor 系统监控主循环
+func (sm *SystemMonitor) monitor() {
 	ticker := time.NewTicker(sm.interval)
 	defer ticker.Stop()
 
@@ -77,91 +88,68 @@ func (sm *SystemMonitor) monitorCPU() {
 		case <-sm.stopChan:
 			return
 		case <-ticker.C:
-			percentage, err := cpu.Percent(0, false) // false 表示获取总体 CPU 使用率
+			// 获取 CPU 使用率
+			cpuPercent, err := cpu.Percent(0, false)
 			if err != nil {
 				sm.logger.Error("获取CPU使用率失败", zap.Error(err))
-				continue
-			}
-			if len(percentage) > 0 {
-				sm.logger.Info("CPU使用率",
-					zap.Float64("percentage", percentage[0]),
-					zap.String("unit", "%"),
+			} else if len(cpuPercent) > 0 {
+				sm.logger.Info("CPU状态",
+					zap.Float64("使用率", cpuPercent[0]),
 				)
 			}
-		}
-	}
-}
 
-// monitorMemory 内存使用率监控
-func (sm *SystemMonitor) monitorMemory() {
-	ticker := time.NewTicker(sm.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-sm.stopChan:
-			return
-		case <-ticker.C:
-			v, err := mem.VirtualMemory()
+			// 获取内存使用情况
+			memInfo, err := mem.VirtualMemory()
 			if err != nil {
-				sm.logger.Error("获取内存使用率失败", zap.Error(err))
-				continue
+				sm.logger.Error("获取内存信息失败", zap.Error(err))
+			} else {
+				sm.logger.Info("内存状态",
+					zap.Float64("使用率", memInfo.UsedPercent),
+					zap.Uint64("总内存", memInfo.Total),
+					zap.Uint64("已用内存", memInfo.Used),
+					zap.Uint64("可用内存", memInfo.Available),
+				)
 			}
 
-			// 格式化内存大小
-			totalSize, totalUnit := formatSize(v.Total)
-			usedSize, usedUnit := formatSize(v.Used)
-			freeSize, freeUnit := formatSize(v.Free)
-
-			sm.logger.Info("内存使用情况",
-				zap.Float64("used_percentage", v.UsedPercent),
-				zap.String("percentage_unit", "%"),
-				zap.Float64("total", totalSize),
-				zap.String("total_unit", totalUnit),
-				zap.Float64("used", usedSize),
-				zap.String("used_unit", usedUnit),
-				zap.Float64("free", freeSize),
-				zap.String("free_unit", freeUnit),
-			)
-		}
-	}
-}
-
-// monitorDisk 磁盘使用率监控
-func (sm *SystemMonitor) monitorDisk() {
-	ticker := time.NewTicker(sm.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-sm.stopChan:
-			return
-		case <-ticker.C:
+			// 获取磁盘使用情况
 			for _, path := range sm.diskPaths {
-				usage, err := disk.Usage(path)
+				diskInfo, err := disk.Usage(path)
 				if err != nil {
-					sm.logger.Error("获取磁盘使用率失败",
+					sm.logger.Error("获取磁盘信息失败",
 						zap.String("path", path),
 						zap.Error(err),
 					)
 					continue
 				}
+				sm.logger.Info("磁盘状态",
+					zap.String("路径", path),
+					zap.Float64("使用率", diskInfo.UsedPercent),
+					zap.Uint64("总空间", diskInfo.Total),
+					zap.Uint64("已用空间", diskInfo.Used),
+					zap.Uint64("可用空间", diskInfo.Free),
+				)
+			}
 
-				// 格式化磁盘大小
-				totalSize, totalUnit := formatSize(usage.Total)
-				usedSize, usedUnit := formatSize(usage.Used)
-				freeSize, freeUnit := formatSize(usage.Free)
+			// 获取系统运行时间
+			hostInfo, err := host.Info()
+			if err != nil {
+				sm.logger.Error("获取主机信息失败", zap.Error(err))
+			} else {
+				uptime := time.Duration(hostInfo.Uptime) * time.Second
+				sm.logger.Info("系统运行时间",
+					zap.String("uptime", formatUptime(uptime)),
+				)
+			}
 
-				sm.logger.Info("磁盘使用情况",
-					zap.String("path", path),
-					zap.Float64("used_percentage", usage.UsedPercent),
-					zap.String("percentage_unit", "%"),
-					zap.Float64("total", totalSize),
-					zap.String("total_unit", totalUnit),
-					zap.Float64("used", usedSize),
-					zap.String("used_unit", usedUnit),
-					zap.Float64("free", freeSize),
-					zap.String("free_unit", freeUnit),
+			// 获取系统负载
+			loadInfo, err := load.Avg()
+			if err != nil {
+				sm.logger.Error("获取系统负载失败", zap.Error(err))
+			} else {
+				sm.logger.Info("系统负载",
+					zap.Float64("1分钟", loadInfo.Load1),
+					zap.Float64("5分钟", loadInfo.Load5),
+					zap.Float64("15分钟", loadInfo.Load15),
 				)
 			}
 		}
