@@ -23,7 +23,11 @@ var (
 	date    = "unknown"
 
 	// 命令行参数
-	configFile = flag.String("config", "", "配置文件路径，默认为 /etc/user-session-monitor/config.yaml")
+	configFile = flag.String(
+		"config",
+		"",
+		"配置文件路径，默认为 /etc/user-session-monitor/config.yaml",
+	)
 )
 
 const (
@@ -38,8 +42,9 @@ func main() {
 	// 获取子命令
 	args := flag.Args()
 	if len(args) == 0 {
-		if err := showMenu(); err != nil {
-			fmt.Printf("执行命令失败: %v\n", err)
+		// 如果没有参数，直接运行监控程序
+		if err := startMonitor(); err != nil {
+			fmt.Printf("启动监控失败: %v\n", err)
 			os.Exit(1)
 		}
 		return
@@ -49,6 +54,9 @@ func main() {
 	cmd := strings.ToLower(args[0])
 	var err error
 	switch cmd {
+	case "menu":
+		// 添加 menu 命令来显示菜单
+		err = showMenu()
 	case "start":
 		err = handleStart()
 	case "stop":
@@ -153,22 +161,24 @@ func showMenu() error {
 func printUsage() {
 	fmt.Printf(`用户会话监控管理命令使用说明:
 ------------------------------------------
-%s                    - 显示管理菜单 (功能更多)
-%s start              - 启动服务
-%s stop               - 停止服务
-%s restart            - 重启服务
-%s status             - 查看服务状态
-%s enable             - 设置开机自启
-%s disable            - 取消开机自启
-%s log                - 查看服务日志
-%s config             - 显示配置文件内容
-%s install            - 安装服务
-%s uninstall          - 卸载服务
-%s version            - 查看版本信息
-%s run                - 直接运行监控程序
+%s                    - 直接启动监控程序
+%s menu              - 显示管理菜单
+%s start             - 启动服务
+%s stop              - 停止服务
+%s restart           - 重启服务
+%s status            - 查看服务状态
+%s enable            - 设置开机自启
+%s disable           - 取消开机自启
+%s log               - 查看服务日志
+%s config            - 显示配置文件内容
+%s install           - 安装服务
+%s uninstall         - 卸载服务
+%s version           - 查看版本信息
+%s run               - 直接运行监控程序
 ------------------------------------------
 `, serviceName, serviceName, serviceName, serviceName, serviceName, serviceName,
-		serviceName, serviceName, serviceName, serviceName, serviceName, serviceName, serviceName)
+		serviceName, serviceName, serviceName, serviceName, serviceName, serviceName,
+		serviceName, serviceName)
 }
 
 func handleStart() error {
