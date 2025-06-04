@@ -20,6 +20,7 @@ type Message struct {
 type ServerInfo struct {
 	Hostname string
 	IP       string
+	OSType   string // 操作系统类型
 }
 
 func NewNotifier(webhookURL string) *Notifier {
