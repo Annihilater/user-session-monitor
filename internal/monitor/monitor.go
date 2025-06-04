@@ -214,13 +214,14 @@ func getServerInfo() (*types.ServerInfo, error) {
 
 // Monitor 监控器
 type Monitor struct {
-	logFile       string
-	eventBus      *event.EventBus
-	logger        *zap.Logger
-	stopChan      chan struct{}
-	serverInfo    *types.ServerInfo
-	TCPMonitor    *TCPMonitor    // TCP 连接监控
-	SystemMonitor *SystemMonitor // 系统资源监控
+	logFile         string
+	eventBus        *event.EventBus
+	logger          *zap.Logger
+	stopChan        chan struct{}
+	serverInfo      *types.ServerInfo
+	TCPMonitor      *TCPMonitor      // TCP 连接监控
+	SystemMonitor   *SystemMonitor   // 系统资源监控
+	HardwareMonitor *HardwareMonitor // 硬件信息监控
 }
 
 func NewMonitor(logFile string, eventBus *event.EventBus, logger *zap.Logger) *Monitor {
@@ -268,11 +269,13 @@ func (m *Monitor) Start() error {
 	// 获取监控配置
 	tcpIntervalFloat := viper.GetFloat64("monitor.tcp.interval")
 	sysIntervalFloat := viper.GetFloat64("monitor.system.interval")
+	hwIntervalFloat := viper.GetFloat64("monitor.hardware.interval")
 
 	// 记录读取到的配置
 	m.logger.Info("读取监控配置",
 		zap.Float64("tcp_interval_seconds", tcpIntervalFloat),
 		zap.Float64("system_interval_seconds", sysIntervalFloat),
+		zap.Float64("hardware_interval_seconds", hwIntervalFloat),
 	)
 
 	// 转换为 Duration
@@ -288,16 +291,29 @@ func (m *Monitor) Start() error {
 		m.logger.Warn("系统监控间隔太小，使用默认值", zap.Duration("interval", sysInterval))
 	}
 
+	hwInterval := time.Duration(hwIntervalFloat * float64(time.Second))
+	if hwInterval < time.Hour {
+		hwInterval = time.Hour // 默认1小时，最小1小时
+		m.logger.Warn("硬件监控间隔太小，使用默认值", zap.Duration("interval", hwInterval))
+	}
+
 	diskPaths := viper.GetStringSlice("monitor.system.disk_paths")
 	if len(diskPaths) == 0 {
 		diskPaths = []string{"/"} // 默认监控根目录
+	}
+
+	hwDiskPaths := viper.GetStringSlice("monitor.hardware.disk_paths")
+	if len(hwDiskPaths) == 0 {
+		hwDiskPaths = diskPaths // 默认使用系统监控的磁盘路径
 	}
 
 	// 记录最终使用的配置
 	m.logger.Info("使用监控配置",
 		zap.Duration("tcp_interval", tcpInterval),
 		zap.Duration("system_interval", sysInterval),
+		zap.Duration("hardware_interval", hwInterval),
 		zap.Strings("disk_paths", diskPaths),
+		zap.Strings("hardware_disk_paths", hwDiskPaths),
 	)
 
 	// 启动 TCP 监控
@@ -307,6 +323,10 @@ func (m *Monitor) Start() error {
 	// 启动系统资源监控
 	m.SystemMonitor = NewSystemMonitor(m.logger, sysInterval, diskPaths)
 	m.SystemMonitor.Start()
+
+	// 启动硬件信息监控
+	m.HardwareMonitor = NewHardwareMonitor(m.logger, hwInterval, hwDiskPaths)
+	m.HardwareMonitor.Start()
 
 	// 启动监控协程
 	go m.monitor()
@@ -321,6 +341,9 @@ func (m *Monitor) Stop() {
 	}
 	if m.SystemMonitor != nil {
 		m.SystemMonitor.Stop()
+	}
+	if m.HardwareMonitor != nil {
+		m.HardwareMonitor.Stop()
 	}
 }
 
