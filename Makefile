@@ -63,7 +63,7 @@ log: prod-log
 # 生产环境运行
 prod-run: build
 	@echo "==> [生产环境] 运行 $(BINARY)..."
-	@$(BUILD_DIR)/$(BINARY)
+	@$(BUILD_DIR)/$(BINARY) run
 
 # 生产环境检查状态
 prod-check: build
@@ -96,7 +96,7 @@ prod-log:
 # 开发环境运行
 dev-run: clean-process
 	@echo "==> [开发环境] 运行服务..."
-	@$(GO) run $(MAIN_GO)
+	@$(GO) run $(MAIN_GO) run
 
 # 开发环境检查状态
 dev-check:
@@ -121,6 +121,13 @@ dev-restart: dev-stop dev-start
 dev-log:
 	@echo "==> [开发环境] 查看服务日志..."
 	@$(GO) run $(MAIN_GO) log
+
+# =====================
+# 进程状态检查
+# =====================
+status:
+	@echo "==> 检查 $(PROCESS_NAME) 进程状态..."
+	@ps aux | grep -v grep | grep $(PROCESS_NAME) || echo "进程未运行"
 
 # =====================
 # 维护命令
@@ -189,11 +196,4 @@ clean-process:
 			sleep 1; \
 		fi; \
 		rm -f /var/run/$(PROJECT_NAME).pid; \
-	fi
-
-# =====================
-# 进程状态检查
-# =====================
-status:
-	@echo "==> 检查 $(PROCESS_NAME) 进程状态..."
-	@ps aux | grep -v grep | grep $(PROCESS_NAME) || echo "进程未运行" 
+	fi 
