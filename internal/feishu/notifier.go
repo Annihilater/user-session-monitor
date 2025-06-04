@@ -5,11 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
+
+	"github.com/Annihilater/user-session-monitor/internal/event"
+	"github.com/Annihilater/user-session-monitor/internal/types"
+	"go.uber.org/zap"
 )
 
 type Notifier struct {
 	webhookURL string
+	logger     *zap.Logger
+	stopChan   chan struct{}
+	wg         sync.WaitGroup
 }
 
 type Message struct {
@@ -17,19 +25,68 @@ type Message struct {
 	Content map[string]interface{} `json:"content"`
 }
 
-type ServerInfo struct {
-	Hostname string
-	IP       string
-	OSType   string // 操作系统类型
-}
-
-func NewNotifier(webhookURL string) *Notifier {
+func NewNotifier(webhookURL string, logger *zap.Logger) *Notifier {
 	return &Notifier{
 		webhookURL: webhookURL,
+		logger:     logger,
+		stopChan:   make(chan struct{}),
 	}
 }
 
-func (n *Notifier) SendLoginNotification(username, ip string, loginTime time.Time, serverInfo *ServerInfo) error {
+// Start 启动通知处理器
+func (n *Notifier) Start(eventChan <-chan event.Event) {
+	n.wg.Add(1)
+	go n.processEvents(eventChan)
+}
+
+// Stop 停止通知处理器
+func (n *Notifier) Stop() {
+	close(n.stopChan)
+	n.wg.Wait()
+}
+
+// processEvents 处理事件
+func (n *Notifier) processEvents(eventChan <-chan event.Event) {
+	defer n.wg.Done()
+
+	for {
+		select {
+		case <-n.stopChan:
+			return
+		case evt := <-eventChan:
+			if err := n.handleEvent(evt); err != nil {
+				n.logger.Error("处理事件失败",
+					zap.Error(err),
+					zap.Any("event", evt),
+				)
+			}
+		}
+	}
+}
+
+// handleEvent 处理单个事件
+func (n *Notifier) handleEvent(evt event.Event) error {
+	switch evt.Type {
+	case event.EventTypeLogin:
+		return n.SendLoginNotification(
+			evt.Username,
+			fmt.Sprintf("%s:%s", evt.IP, evt.Port),
+			evt.Timestamp,
+			evt.ServerInfo,
+		)
+	case event.EventTypeLogout:
+		return n.SendLogoutNotification(
+			evt.Username,
+			fmt.Sprintf("%s:%s", evt.IP, evt.Port),
+			evt.Timestamp,
+			evt.ServerInfo,
+		)
+	default:
+		return fmt.Errorf("未知的事件类型: %v", evt.Type)
+	}
+}
+
+func (n *Notifier) SendLoginNotification(username, ip string, loginTime time.Time, serverInfo *types.ServerInfo) error {
 	msg := Message{
 		MsgType: "text",
 		Content: map[string]interface{}{
@@ -44,7 +101,7 @@ func (n *Notifier) SendLoginNotification(username, ip string, loginTime time.Tim
 	return n.sendMessage(msg)
 }
 
-func (n *Notifier) SendLogoutNotification(username, ip string, logoutTime time.Time, serverInfo *ServerInfo) error {
+func (n *Notifier) SendLogoutNotification(username, ip string, logoutTime time.Time, serverInfo *types.ServerInfo) error {
 	msg := Message{
 		MsgType: "text",
 		Content: map[string]interface{}{
