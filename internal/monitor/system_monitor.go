@@ -59,7 +59,7 @@ func (sm *SystemMonitor) monitor() {
 				sm.logger.Error("获取CPU使用率失败", zap.Error(err))
 			} else if len(cpuPercent) > 0 {
 				sm.logger.Info("CPU状态",
-					zap.String("使用率", fmt.Sprintf("%.2f%%", cpuPercent[0])),
+					zap.String("usage", fmt.Sprintf("%.2f%%", cpuPercent[0])),
 				)
 			}
 
@@ -69,10 +69,10 @@ func (sm *SystemMonitor) monitor() {
 				sm.logger.Error("获取内存信息失败", zap.Error(err))
 			} else {
 				sm.logger.Info("内存状态",
-					zap.String("使用率", fmt.Sprintf("%.2f%%", memInfo.UsedPercent)),
-					zap.String("总内存", formatBytes(memInfo.Total)),
-					zap.String("已用内存", formatBytes(memInfo.Used)),
-					zap.String("可用内存", formatBytes(memInfo.Available)),
+					zap.String("usage", fmt.Sprintf("%.2f%%", memInfo.UsedPercent)),
+					zap.String("total", formatBytes(memInfo.Total)),
+					zap.String("used", formatBytes(memInfo.Used)),
+					zap.String("available", formatBytes(memInfo.Available)),
 				)
 			}
 
@@ -87,11 +87,11 @@ func (sm *SystemMonitor) monitor() {
 					continue
 				}
 				sm.logger.Info("磁盘状态",
-					zap.String("路径", path),
-					zap.String("使用率", fmt.Sprintf("%.2f%%", usage.UsedPercent)),
-					zap.String("总空间", formatBytes(usage.Total)),
-					zap.String("已用空间", formatBytes(usage.Used)),
-					zap.String("可用空间", formatBytes(usage.Free)),
+					zap.String("path", path),
+					zap.String("usage", fmt.Sprintf("%.2f%%", usage.UsedPercent)),
+					zap.String("total", formatBytes(usage.Total)),
+					zap.String("used", formatBytes(usage.Used)),
+					zap.String("free", formatBytes(usage.Free)),
 				)
 			}
 
@@ -112,9 +112,9 @@ func (sm *SystemMonitor) monitor() {
 				sm.logger.Error("获取系统负载失败", zap.Error(err))
 			} else {
 				sm.logger.Info("系统负载",
-					zap.Float64("1分钟", loadInfo.Load1),
-					zap.Float64("5分钟", loadInfo.Load5),
-					zap.Float64("15分钟", loadInfo.Load15),
+					zap.Float64("load1", loadInfo.Load1),
+					zap.Float64("load5", loadInfo.Load5),
+					zap.Float64("load15", loadInfo.Load15),
 				)
 			}
 		}
