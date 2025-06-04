@@ -223,6 +223,8 @@ type Monitor struct {
 	SystemMonitor    *SystemMonitor    // 系统资源监控
 	HardwareMonitor  *HardwareMonitor  // 硬件信息监控
 	HeartbeatMonitor *HeartbeatMonitor // 心跳监控
+	NetworkMonitor   *NetworkMonitor   // 网络监控
+	ProcessMonitor   *ProcessMonitor   // 进程监控
 }
 
 func NewMonitor(logFile string, eventBus *event.EventBus, logger *zap.Logger) *Monitor {
@@ -335,6 +337,30 @@ func (m *Monitor) Start() error {
 	m.HeartbeatMonitor = NewHeartbeatMonitor(m.logger, heartbeatInterval)
 	m.HeartbeatMonitor.Start()
 
+	// 获取网络监控配置
+	networkIntervalFloat := viper.GetFloat64("monitor.network.interval")
+	networkInterval := time.Duration(networkIntervalFloat * float64(time.Second))
+	if networkInterval < 100*time.Millisecond {
+		networkInterval = time.Second
+		m.logger.Warn("网络监控间隔太小，使用默认值", zap.Duration("interval", networkInterval))
+	}
+
+	// 启动网络监控
+	m.NetworkMonitor = NewNetworkMonitor(m.logger, networkInterval)
+	m.NetworkMonitor.Start()
+
+	// 获取进程监控配置
+	processIntervalFloat := viper.GetFloat64("monitor.process.interval")
+	processInterval := time.Duration(processIntervalFloat * float64(time.Second))
+	if processInterval < 100*time.Millisecond {
+		processInterval = time.Second
+		m.logger.Warn("进程监控间隔太小，使用默认值", zap.Duration("interval", processInterval))
+	}
+
+	// 启动进程监控
+	m.ProcessMonitor = NewProcessMonitor(m.logger, processInterval)
+	m.ProcessMonitor.Start()
+
 	// 启动系统资源监控
 	m.SystemMonitor = NewSystemMonitor(m.logger, sysInterval, diskPaths)
 	m.SystemMonitor.Start()
@@ -362,6 +388,12 @@ func (m *Monitor) Stop() {
 	}
 	if m.HeartbeatMonitor != nil {
 		m.HeartbeatMonitor.Stop()
+	}
+	if m.NetworkMonitor != nil {
+		m.NetworkMonitor.Stop()
+	}
+	if m.ProcessMonitor != nil {
+		m.ProcessMonitor.Stop()
 	}
 }
 
