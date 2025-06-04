@@ -148,14 +148,14 @@ func (pm *ProcessMonitor) monitor() {
 			// 记录每个 TOP 进程的详细信息
 			for i, proc := range topProcesses {
 				pm.logger.Info("TOP进程详情",
-					zap.Int("排名", i+1),
-					zap.Int32("PID", proc.PID),
-					zap.String("名称", proc.Name),
-					zap.Float64("CPU占用", proc.CPUPercent),
-					zap.String("内存占用", formatBytes(proc.MemoryUsage)),
-					zap.String("内存占用率", fmt.Sprintf("%.2f%%", proc.MemoryPercent)),
-					zap.String("用户", proc.Username),
-					zap.Time("创建时间", proc.CreateTime),
+					zap.Int("proc_rank", i+1),
+					zap.Int32("proc_pid", proc.PID),
+					zap.String("proc_name", proc.Name),
+					zap.Float64("proc_cpu_percent", proc.CPUPercent),
+					zap.String("proc_memory_usage", formatBytes(proc.MemoryUsage)),
+					zap.String("proc_memory_percent", fmt.Sprintf("%.2f%%", proc.MemoryPercent)),
+					zap.String("proc_user", proc.Username),
+					zap.Time("proc_create_time", proc.CreateTime),
 				)
 			}
 		}
