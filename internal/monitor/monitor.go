@@ -16,6 +16,72 @@ import (
 	"github.com/Annihilater/user-session-monitor/internal/feishu"
 )
 
+// 系统认证日志文件路径
+var authLogPaths = map[string]string{
+	"debian":        "/var/log/auth.log", // Debian/Ubuntu
+	"ubuntu":        "/var/log/auth.log", // Debian/Ubuntu
+	"rhel":          "/var/log/secure",   // RHEL/CentOS
+	"centos":        "/var/log/secure",   // RHEL/CentOS
+	"fedora":        "/var/log/secure",   // Fedora
+	"amazon":        "/var/log/secure",   // Amazon Linux
+	"suse":          "/var/log/messages", // SUSE
+	"opensuse-leap": "/var/log/messages", // openSUSE Leap
+}
+
+// 检测操作系统类型
+func detectOSType() (string, error) {
+	// 首先尝试读取 /etc/os-release 文件
+	content, err := os.ReadFile("/etc/os-release")
+	if err == nil {
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "ID=") {
+				osType := strings.Trim(strings.TrimPrefix(line, "ID="), "\"")
+				return strings.ToLower(osType), nil
+			}
+		}
+	}
+
+	// 如果无法从 os-release 获取，尝试其他发行版特定文件
+	if _, err := os.Stat("/etc/debian_version"); err == nil {
+		return "debian", nil
+	}
+	if _, err := os.Stat("/etc/redhat-release"); err == nil {
+		return "rhel", nil
+	}
+	if _, err := os.Stat("/etc/centos-release"); err == nil {
+		return "centos", nil
+	}
+
+	return "", fmt.Errorf("无法检测操作系统类型")
+}
+
+// 获取认证日志文件路径
+func getAuthLogPath(configPath string) (string, error) {
+	// 如果配置文件中指定了路径，优先使用配置的路径
+	if configPath != "" {
+		if _, err := os.Stat(configPath); err == nil {
+			return configPath, nil
+		}
+	}
+
+	// 自动检测操作系统类型
+	osType, err := detectOSType()
+	if err != nil {
+		return "", fmt.Errorf("检测操作系统类型失败: %v", err)
+	}
+
+	// 根据操作系统类型获取日志路径
+	if logPath, ok := authLogPaths[osType]; ok {
+		// 验证日志文件是否存在且可读
+		if _, err := os.Stat(logPath); err == nil {
+			return logPath, nil
+		}
+	}
+
+	return "", fmt.Errorf("无法找到认证日志文件")
+}
+
 var (
 	// 登录事件匹配模式
 	// 匹配示例：
@@ -108,27 +174,40 @@ func makeLoginKey(username, ip, port string) string {
 func getServerInfo() (*feishu.ServerInfo, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		return nil, fmt.Errorf("get hostname failed: %v", err)
+		return nil, fmt.Errorf("获取主机名失败: %v", err)
 	}
 
 	// 获取非回环IP地址
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		return nil, fmt.Errorf("get interface addresses failed: %v", err)
+		return nil, fmt.Errorf("获取网络接口地址失败: %v", err)
 	}
 
+	var ip string
 	for _, addr := range addrs {
 		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 			if ipnet.IP.To4() != nil {
-				return &feishu.ServerInfo{
-					Hostname: hostname,
-					IP:       ipnet.IP.String(),
-				}, nil
+				ip = ipnet.IP.String()
+				break
 			}
 		}
 	}
 
-	return nil, fmt.Errorf("no valid IP address found")
+	if ip == "" {
+		return nil, fmt.Errorf("未找到有效的IP地址")
+	}
+
+	// 获取操作系统类型
+	osType, err := detectOSType()
+	if err != nil {
+		osType = "未知"
+	}
+
+	return &feishu.ServerInfo{
+		Hostname: hostname,
+		IP:       ip,
+		OSType:   osType,
+	}, nil
 }
 
 type Monitor struct {
@@ -146,36 +225,45 @@ func NewMonitor(logFile string, notifier *feishu.Notifier, logger *zap.Logger) *
 }
 
 func (m *Monitor) Start() error {
+	// 获取认证日志文件路径
+	logPath, err := getAuthLogPath(m.logFile)
+	if err != nil {
+		return fmt.Errorf("获取认证日志文件路径失败: %v", err)
+	}
+	m.logFile = logPath
+
 	// 检查日志文件是否存在且可读
 	if _, err := os.Stat(m.logFile); os.IsNotExist(err) {
-		return fmt.Errorf("log file %s does not exist", m.logFile)
+		return fmt.Errorf("日志文件 %s 不存在", m.logFile)
 	}
 
 	// 尝试打开文件以验证权限
 	file, err := os.Open(m.logFile)
 	if err != nil {
-		return fmt.Errorf("cannot open log file %s: %v", m.logFile, err)
+		return fmt.Errorf("无法打开日志文件 %s: %v", m.logFile, err)
 	}
 	file.Close()
 
 	// 获取服务器信息
 	serverInfo, err := getServerInfo()
 	if err != nil {
-		return fmt.Errorf("failed to get server info: %v", err)
+		return fmt.Errorf("获取服务器信息失败: %v", err)
 	}
-	m.logger.Info("server info",
+	m.logger.Info("服务器信息",
 		zap.String("hostname", serverInfo.Hostname),
 		zap.String("ip", serverInfo.IP),
+		zap.String("os_type", serverInfo.OSType),
+		zap.String("log_file", m.logFile),
 	)
 
 	cmd := exec.Command("tail", "-f", m.logFile)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("failed to create stdout pipe: %v", err)
+		return fmt.Errorf("创建输出管道失败: %v", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start tail command: %v", err)
+		return fmt.Errorf("启动 tail 命令失败: %v", err)
 	}
 
 	scanner := bufio.NewScanner(stdout)
@@ -185,7 +273,7 @@ func (m *Monitor) Start() error {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("scanner error: %v", err)
+		return fmt.Errorf("扫描日志失败: %v", err)
 	}
 
 	return nil
