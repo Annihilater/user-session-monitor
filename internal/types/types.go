@@ -19,7 +19,7 @@ type LoginRecord struct {
 
 // Event 定义事件结构
 type Event struct {
-	Type       EventType
+	Type       Type
 	Username   string
 	IP         string
 	Port       string
@@ -27,12 +27,12 @@ type Event struct {
 	ServerInfo *ServerInfo
 }
 
-// EventType 定义事件类型
-type EventType int
+// Type 定义事件类型
+type Type int
 
 const (
-	EventTypeLogin EventType = iota
-	EventTypeLogout
+	TypeLogin Type = iota
+	TypeLogout
 )
 
 // TCPState TCP 连接状态
