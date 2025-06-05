@@ -7,19 +7,9 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 	"github.com/shirou/gopsutil/v3/process"
 	"go.uber.org/zap"
-)
 
-// ProcessInfo 进程信息
-type ProcessInfo struct {
-	PID           int32
-	Name          string
-	Command       string
-	CPUPercent    float64
-	MemoryUsage   uint64
-	MemoryPercent float32
-	Username      string
-	CreateTime    time.Time
-}
+	"github.com/Annihilater/user-session-monitor/internal/types"
+)
 
 // ProcessMonitor 进程监控器
 type ProcessMonitor struct {
@@ -44,7 +34,7 @@ func (pm *ProcessMonitor) Stop() {
 }
 
 // getTopProcesses 获取 CPU 占用最高的进程
-func (pm *ProcessMonitor) getTopProcesses(count int) ([]ProcessInfo, error) {
+func (pm *ProcessMonitor) getTopProcesses(count int) ([]types.ProcessInfo, error) {
 	processes, err := process.Processes()
 	if err != nil {
 		return nil, err
@@ -57,7 +47,7 @@ func (pm *ProcessMonitor) getTopProcesses(count int) ([]ProcessInfo, error) {
 	}
 	totalMem := memInfo.Total
 
-	var processInfos []ProcessInfo
+	var processInfos []types.ProcessInfo
 	for _, p := range processes {
 		name, err := p.Name()
 		if err != nil {
@@ -92,7 +82,7 @@ func (pm *ProcessMonitor) getTopProcesses(count int) ([]ProcessInfo, error) {
 		// 计算内存使用百分比
 		memPercent := float32(mem.RSS) / float32(totalMem) * 100
 
-		processInfos = append(processInfos, ProcessInfo{
+		processInfos = append(processInfos, types.ProcessInfo{
 			PID:           p.Pid,
 			Name:          name,
 			Command:       command,
