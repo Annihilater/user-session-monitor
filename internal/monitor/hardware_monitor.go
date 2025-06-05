@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
@@ -20,10 +21,11 @@ type HardwareMonitor struct {
 	interval  time.Duration
 	stopChan  chan struct{}
 	diskPaths []string
+	runMode   string // 运行模式：thread 或 goroutine
 }
 
 // NewHardwareMonitor 创建新的硬件信息监控器
-func NewHardwareMonitor(logger *zap.Logger, interval time.Duration, diskPaths []string) *HardwareMonitor {
+func NewHardwareMonitor(logger *zap.Logger, interval time.Duration, diskPaths []string, runMode string) *HardwareMonitor {
 	if len(diskPaths) == 0 {
 		diskPaths = []string{"/"}
 	}
@@ -32,12 +34,21 @@ func NewHardwareMonitor(logger *zap.Logger, interval time.Duration, diskPaths []
 		interval:  interval,
 		stopChan:  make(chan struct{}),
 		diskPaths: diskPaths,
+		runMode:   runMode,
 	}
 }
 
 // Start 启动硬件信息监控
 func (hm *HardwareMonitor) Start() {
-	go hm.monitorHardware()
+	if hm.runMode == "thread" {
+		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			hm.monitorHardware()
+		}()
+	} else {
+		go hm.monitorHardware()
+	}
 }
 
 // Stop 停止硬件信息监控
