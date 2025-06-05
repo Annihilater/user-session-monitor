@@ -50,7 +50,7 @@ func validateConfig(cfg *config.Config) error {
 }
 
 // NewEmailNotifier 创建新的邮件通知器
-func NewEmailNotifier(cfg *config.Config, logger *zap.Logger) (*EmailNotifier, error) {
+func NewEmailNotifier(cfg *config.Config, logger *zap.Logger) (notifier.Notifier, error) {
 	// 验证配置
 	if err := validateConfig(cfg); err != nil {
 		return nil, err
