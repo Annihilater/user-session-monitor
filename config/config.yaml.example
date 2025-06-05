@@ -36,6 +36,8 @@ notify:
 
   # Telegram 通知配置
   telegram:
+    # 是否启用 Telegram 通知
+    enabled: true
     # 从 BotFather 获取的机器人令牌
     bot_token: "xxxxxx:xxxxxx"
     # 目标聊天 ID（群组或个人）
