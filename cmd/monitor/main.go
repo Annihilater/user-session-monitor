@@ -34,7 +34,7 @@ var (
 
 	// 用于存储当前运行的监控器实例
 	currentMonitor  *monitor.Monitor
-	currentNotifier *notify.Notifier
+	currentNotifier *notify.NotifyService
 	currentLogger   *zap.Logger
 )
 
@@ -483,7 +483,7 @@ func startMonitor() error {
 	// 输出配置内容
 	logger.Info("当前配置",
 		zap.Any("monitor", viper.Get("monitor")),
-		zap.Any("feishu", viper.Get("feishu")),
+		zap.Any("notify", viper.Get("notify")),
 	)
 
 	// 创建事件总线
@@ -509,12 +509,13 @@ func startMonitor() error {
 	)
 	currentMonitor = mon
 
-	// 初始化飞书通知器
-	notifier := notify.NewNotifier(
-		viper.GetString("feishu.webhook_url"),
-		logger,
-	)
-	currentNotifier = notifier
+	// 初始化通知服务
+	notifyService := notify.NewNotifyService(logger)
+	if err := notifyService.InitNotifiers(); err != nil {
+		logger.Error("初始化通知器失败", zap.Error(err))
+		return fmt.Errorf("初始化通知器失败: %v", err)
+	}
+	currentNotifier = notifyService
 
 	// 写入PID文件
 	pid := os.Getpid()
@@ -531,8 +532,8 @@ func startMonitor() error {
 		return fmt.Errorf("启动监控器失败: %v", err)
 	}
 
-	// 启动通知器
-	notifier.Start(eventBus.Subscribe())
+	// 启动通知服务
+	notifyService.Start(eventBus.Subscribe())
 
 	fmt.Println("服务已启动")
 
