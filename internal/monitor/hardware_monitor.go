@@ -58,17 +58,28 @@ func (hm *HardwareMonitor) getPublicIP() string {
 		if err != nil {
 			continue
 		}
-		defer resp.Body.Close()
 
-		ip, err := io.ReadAll(resp.Body)
-		if err != nil {
-			continue
-		}
+		// 读取响应体并确保关闭
+		ip, err := func() (string, error) {
+			defer func() {
+				if closeErr := resp.Body.Close(); closeErr != nil {
+					hm.GetLogger().Error("关闭响应体失败",
+						zap.String("service", service),
+						zap.Error(closeErr),
+					)
+				}
+			}()
 
-		// 清理IP地址字符串
-		ipStr := strings.TrimSpace(string(ip))
-		if ipStr != "" {
-			return ipStr
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return "", err
+			}
+			return strings.TrimSpace(string(body)), nil
+		}()
+
+		// 如果获取成功且IP不为空，则返回
+		if err == nil && ip != "" {
+			return ip
 		}
 	}
 
