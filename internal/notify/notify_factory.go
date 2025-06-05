@@ -3,7 +3,9 @@ package notify
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -12,12 +14,24 @@ func RegisterNotifier(notifierType NotifierType, factory NotifierFactory) {
 	notifierFactories[notifierType] = factory
 }
 
+// getNotifierTimeout 获取通知器超时配置
+func getNotifierTimeout(notifierType string) time.Duration {
+	// 从配置文件获取超时时间，默认3秒
+	timeoutSeconds := viper.GetFloat64(fmt.Sprintf("notify.%s.timeout", notifierType))
+	if timeoutSeconds <= 0 {
+		timeoutSeconds = 3
+	}
+	return time.Duration(timeoutSeconds * float64(time.Second))
+}
+
 // CreateNotifier 创建通知器实例
 func CreateNotifier(config NotifierConfig, logger *zap.Logger) (Notifier, error) {
 	factory, exists := notifierFactories[config.Type]
 	if !exists {
 		return nil, fmt.Errorf("未知的通知器类型: %s", config.Type)
 	}
+	// 将超时配置添加到通知器配置中
+	config.Config["timeout"] = fmt.Sprintf("%v", getNotifierTimeout(string(config.Type)))
 	return factory(config, logger)
 }
 
