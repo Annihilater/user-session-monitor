@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -52,7 +53,7 @@ func (n *FeishuNotifier) Start(eventChan <-chan types.Event) {
 }
 
 // SendLoginNotification 发送登录通知
-func (n *FeishuNotifier) SendLoginNotification(username, ip string, loginTime time.Time, serverInfo *types.ServerInfo) error {
+func (n *FeishuNotifier) SendLoginNotification(username, address string, timestamp time.Time, serverInfo *types.ServerInfo) error {
 	msg := types.NotifyMessage{
 		MsgType: "interactive",
 		Content: map[string]interface{}{
@@ -64,21 +65,21 @@ func (n *FeishuNotifier) SendLoginNotification(username, ip string, loginTime ti
 					"tag": "div",
 					"text": map[string]interface{}{
 						"tag":     "lark_md",
-						"content": fmt.Sprintf("**用户名：** %s\n**登录IP：** %s\n**登录时间：** %s", username, ip, loginTime.Format("2006-01-02 15:04:05")),
+						"content": fmt.Sprintf("**用户**: %s\n**来源**: %s\n**时间**: %s", username, address, timestamp.Format("2006-01-02 15:04:05")),
 					},
 				},
 				{
 					"tag": "div",
 					"text": map[string]interface{}{
 						"tag":     "lark_md",
-						"content": fmt.Sprintf("**服务器信息：**\n主机名：%s\n服务器IP：%s\n系统类型：%s", serverInfo.Hostname, serverInfo.IP, serverInfo.OSType),
+						"content": fmt.Sprintf("**主机名**: %s\n**IP**: %s\n**系统**: %s", serverInfo.Hostname, serverInfo.IP, serverInfo.OSType),
 					},
 				},
 			},
 			"header": map[string]interface{}{
-				"template": "red",
+				"template": "blue",
 				"title": map[string]interface{}{
-					"content": "⚠️ 用户登录通知",
+					"content": "🔐 用户登录通知",
 					"tag":     "plain_text",
 				},
 			},
@@ -88,7 +89,7 @@ func (n *FeishuNotifier) SendLoginNotification(username, ip string, loginTime ti
 }
 
 // SendLogoutNotification 发送登出通知
-func (n *FeishuNotifier) SendLogoutNotification(username, ip string, logoutTime time.Time, serverInfo *types.ServerInfo) error {
+func (n *FeishuNotifier) SendLogoutNotification(username, address string, timestamp time.Time, serverInfo *types.ServerInfo) error {
 	msg := types.NotifyMessage{
 		MsgType: "interactive",
 		Content: map[string]interface{}{
@@ -100,21 +101,21 @@ func (n *FeishuNotifier) SendLogoutNotification(username, ip string, logoutTime 
 					"tag": "div",
 					"text": map[string]interface{}{
 						"tag":     "lark_md",
-						"content": fmt.Sprintf("**用户名：** %s\n**登出IP：** %s\n**登出时间：** %s", username, ip, logoutTime.Format("2006-01-02 15:04:05")),
+						"content": fmt.Sprintf("**用户**: %s\n**来源**: %s\n**时间**: %s", username, address, timestamp.Format("2006-01-02 15:04:05")),
 					},
 				},
 				{
 					"tag": "div",
 					"text": map[string]interface{}{
 						"tag":     "lark_md",
-						"content": fmt.Sprintf("**服务器信息：**\n主机名：%s\n服务器IP：%s\n系统类型：%s", serverInfo.Hostname, serverInfo.IP, serverInfo.OSType),
+						"content": fmt.Sprintf("**主机名**: %s\n**IP**: %s\n**系统**: %s", serverInfo.Hostname, serverInfo.IP, serverInfo.OSType),
 					},
 				},
 			},
 			"header": map[string]interface{}{
-				"template": "blue",
+				"template": "red",
 				"title": map[string]interface{}{
-					"content": "🔔 用户登出通知",
+					"content": "🚪 用户登出通知",
 					"tag":     "plain_text",
 				},
 			},
@@ -130,14 +131,45 @@ func (n *FeishuNotifier) sendMessage(msg types.NotifyMessage) error {
 		return fmt.Errorf("序列化消息失败: %v", err)
 	}
 
+	n.logger.Debug("准备发送飞书消息",
+		zap.String("webhook_url", n.webhookURL),
+		zap.String("payload", string(payload)),
+	)
+
 	resp, err := http.Post(n.webhookURL, "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		return fmt.Errorf("发送请求失败: %v", err)
 	}
 	defer resp.Body.Close()
 
+	// 读取响应内容
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("读取响应失败: %v", err)
+	}
+
+	// 记录响应详情
+	n.logger.Debug("收到飞书响应",
+		zap.Int("status_code", resp.StatusCode),
+		zap.String("response", string(body)),
+	)
+
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("请求失败，状态码: %d", resp.StatusCode)
+		return fmt.Errorf("请求失败，状态码: %d，响应内容: %s", resp.StatusCode, string(body))
+	}
+
+	// 解析飞书响应
+	var response struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return fmt.Errorf("解析响应失败: %v, 原始响应: %s", err, string(body))
+	}
+
+	// 检查飞书返回的状态码
+	if response.Code != 0 {
+		return fmt.Errorf("飞书API返回错误: code=%d, msg=%s", response.Code, response.Msg)
 	}
 
 	return nil
