@@ -26,22 +26,22 @@ type Event struct {
 
 // EventBus 事件总线
 type EventBus struct {
-	eventChan chan Event
+	eventChan chan types.Event
 }
 
 // NewEventBus 创建新的事件总线
 func NewEventBus(bufferSize int) *EventBus {
 	return &EventBus{
-		eventChan: make(chan Event, bufferSize),
+		eventChan: make(chan types.Event, bufferSize),
 	}
 }
 
 // Publish 发布事件
-func (eb *EventBus) Publish(event Event) {
+func (eb *EventBus) Publish(event types.Event) {
 	eb.eventChan <- event
 }
 
 // Subscribe 订阅事件
-func (eb *EventBus) Subscribe() <-chan Event {
+func (eb *EventBus) Subscribe() <-chan types.Event {
 	return eb.eventChan
 }
