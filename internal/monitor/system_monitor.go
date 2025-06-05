@@ -3,6 +3,7 @@ package monitor
 import (
 	"fmt"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -18,6 +19,7 @@ type SystemMonitor struct {
 	logger    *zap.Logger
 	interval  time.Duration
 	stopChan  chan struct{}
+	wg        sync.WaitGroup
 	diskPaths []string // 要监控的磁盘路径列表
 	runMode   string   // 运行模式：thread 或 goroutine
 }
@@ -38,6 +40,10 @@ func NewSystemMonitor(logger *zap.Logger, interval time.Duration, diskPaths []st
 
 // Start 启动系统监控
 func (sm *SystemMonitor) Start() {
+	sm.wg.Add(1)
+	sm.logger.Info("启动系统监控",
+		zap.String("run_mode", sm.runMode),
+	)
 	if sm.runMode == "thread" {
 		go func() {
 			runtime.LockOSThread()
@@ -52,10 +58,12 @@ func (sm *SystemMonitor) Start() {
 // Stop 停止系统监控
 func (sm *SystemMonitor) Stop() {
 	close(sm.stopChan)
+	sm.wg.Wait()
 }
 
 // monitor 系统监控主循环
 func (sm *SystemMonitor) monitor() {
+	defer sm.wg.Done()
 	ticker := time.NewTicker(sm.interval)
 	defer ticker.Stop()
 
