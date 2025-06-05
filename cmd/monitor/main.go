@@ -601,6 +601,16 @@ func getMaskedConfig() map[string]interface{} {
 				dingtalkConfig["secret"] = "******"
 			}
 		}
+
+		// 处理 Telegram 配置
+		if telegramConfig, ok := notifyConfig["telegram"].(map[string]interface{}); ok {
+			if _, exists := telegramConfig["bot_token"]; exists {
+				telegramConfig["bot_token"] = "******"
+			}
+			if _, exists := telegramConfig["chat_id"]; exists {
+				telegramConfig["chat_id"] = "******"
+			}
+		}
 	}
 
 	return config
