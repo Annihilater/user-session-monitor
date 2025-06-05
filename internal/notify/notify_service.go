@@ -158,23 +158,22 @@ func (s *NotifyManager) InitNotifiers() error {
 			zap.String("name_en", config.NameEn),
 		)
 		s.notifiers = append(s.notifiers, notifier)
+
+		// 在后台发送测试消息
+		go func(n Notifier) {
+			if err := n.sendTestMessage(); err != nil {
+				s.logger.Warn("通知器测试失败",
+					zap.String("notifier_zh", n.GetNameZh()),
+					zap.String("notifier_en", n.GetNameEn()),
+					zap.Error(err),
+				)
+			}
+		}(notifier)
 	}
 
 	// 验证是否至少有一个通知器被初始化
 	if len(s.notifiers) == 0 {
 		return fmt.Errorf("没有配置任何通知器")
-	}
-
-	// 测试所有通知器
-	for _, notifier := range s.notifiers {
-		if err := notifier.sendTestMessage(); err != nil {
-			s.logger.Error("通知器测试失败",
-				zap.String("notifier_zh", notifier.GetNameZh()),
-				zap.String("notifier_en", notifier.GetNameEn()),
-				zap.Error(err),
-			)
-			return fmt.Errorf("通知器测试失败: %v", err)
-		}
 	}
 
 	return nil
