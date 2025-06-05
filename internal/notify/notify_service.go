@@ -108,7 +108,7 @@ func (s *NotifyManager) InitNotifiers() error {
 			Type:    NotifierTypeTelegram,
 			NameZh:  "电报",
 			NameEn:  "Telegram",
-			Enabled: true, // Telegram 默认不使用 enabled 字段
+			Enabled: viper.GetBool("notify.telegram.enabled"),
 			Config: map[string]string{
 				"bot_token": viper.GetString("notify.telegram.bot_token"),
 				"chat_id":   viper.GetString("notify.telegram.chat_id"),
