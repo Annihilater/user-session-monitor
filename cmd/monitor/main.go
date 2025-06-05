@@ -110,7 +110,7 @@ func main() {
 	args := flag.Args()
 	if len(args) == 0 {
 		// 如果没有参数，直接启动服务
-		if err := startMonitor(); err != nil {
+		if err := start(); err != nil {
 			fmt.Printf("启动服务失败: %v\n", err)
 			os.Exit(1)
 		}
@@ -124,7 +124,7 @@ func main() {
 	case "menu":
 		err = showMenu()
 	case "run":
-		err = startMonitor()
+		err = start()
 	case "start":
 		err = handleStart()
 	case "stop":
@@ -241,7 +241,7 @@ func handleStart() error {
 	}
 
 	// 启动服务
-	if err := startMonitor(); err != nil {
+	if err := start(); err != nil {
 		return fmt.Errorf("启动服务失败: %v", err)
 	}
 
@@ -414,7 +414,7 @@ func isServiceEnabled() string {
 	return "否"
 }
 
-func startMonitor() error {
+func start() error {
 	// 如果已经在运行，返回错误
 	if currentMonitor != nil {
 		return fmt.Errorf("服务已经在运行中")
@@ -534,7 +534,7 @@ func startMonitor() error {
 	}
 
 	// 启动通知服务
-	notifyService.Start(eventBus.Subscribe())
+	notifyService.Start(eventBus)
 
 	fmt.Println("服务已启动")
 
