@@ -167,7 +167,7 @@ func makeLoginKey(username, ip, port string) string {
 // Monitor 监控器
 type Monitor struct {
 	logFile          string
-	eventBus         *event.EventBus
+	eventBus         *event.Bus
 	logger           *zap.Logger
 	stopChan         chan struct{}
 	runMode          string            // 运行模式：thread 或 goroutine
@@ -180,7 +180,7 @@ type Monitor struct {
 	ServerMonitor    *ServerMonitor    // 服务器信息监控
 }
 
-func NewMonitor(logFile string, eventBus *event.EventBus, logger *zap.Logger, runMode string) *Monitor {
+func NewMonitor(logFile string, eventBus *event.Bus, logger *zap.Logger, runMode string) *Monitor {
 	// 默认使用协程模式
 	if runMode != "thread" && runMode != "goroutine" {
 		runMode = "goroutine"
@@ -484,7 +484,7 @@ func (m *Monitor) processLine(line string) {
 
 		// 发布登录事件
 		m.eventBus.Publish(types.Event{
-			Type:       types.EventTypeLogin,
+			Type:       types.TypeLogin,
 			Username:   username,
 			IP:         ip,
 			Port:       port,
@@ -563,7 +563,7 @@ func (m *Monitor) processLine(line string) {
 
 			// 发布登出事件
 			m.eventBus.Publish(types.Event{
-				Type:       types.EventTypeLogout,
+				Type:       types.TypeLogout,
 				Username:   username,
 				IP:         ip,
 				Port:       port,
