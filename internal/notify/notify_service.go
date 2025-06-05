@@ -114,6 +114,20 @@ func (s *NotifyManager) InitNotifiers() error {
 				"chat_id":   viper.GetString("notify.telegram.chat_id"),
 			},
 		},
+		{
+			Type:    NotifierTypeEmail,
+			NameZh:  "邮件",
+			NameEn:  "Email",
+			Enabled: viper.GetBool("notify.email.enabled"),
+			Config: map[string]string{
+				"host":     viper.GetString("notify.email.host"),
+				"port":     viper.GetString("notify.email.port"),
+				"username": viper.GetString("notify.email.username"),
+				"password": viper.GetString("notify.email.password"),
+				"from":     viper.GetString("notify.email.from"),
+				"to":       viper.GetString("notify.email.to"),
+			},
+		},
 	}
 
 	// 遍历配置创建通知器
