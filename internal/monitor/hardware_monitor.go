@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -18,12 +16,8 @@ import (
 
 // HardwareMonitor 硬件信息监控器
 type HardwareMonitor struct {
-	logger    *zap.Logger
-	interval  time.Duration
-	stopChan  chan struct{}
-	wg        sync.WaitGroup
+	BaseMonitor
 	diskPaths []string
-	runMode   string // 运行模式：thread 或 goroutine
 }
 
 // NewHardwareMonitor 创建新的硬件信息监控器
@@ -32,35 +26,19 @@ func NewHardwareMonitor(logger *zap.Logger, interval time.Duration, diskPaths []
 		diskPaths = []string{"/"}
 	}
 	return &HardwareMonitor{
-		logger:    logger,
-		interval:  interval,
-		stopChan:  make(chan struct{}),
-		diskPaths: diskPaths,
-		runMode:   runMode,
+		BaseMonitor: NewBaseMonitor("硬件监控", logger, interval, runMode),
+		diskPaths:   diskPaths,
 	}
 }
 
 // Start 启动硬件信息监控
 func (hm *HardwareMonitor) Start() {
-	hm.wg.Add(1)
-	hm.logger.Info("启动硬件监控",
-		zap.String("run_mode", hm.runMode),
-	)
-	if hm.runMode == "thread" {
-		go func() {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-			hm.monitorHardware()
-		}()
-	} else {
-		go hm.monitorHardware()
-	}
+	hm.BaseMonitor.Start(hm.monitorHardware)
 }
 
 // Stop 停止硬件信息监控
 func (hm *HardwareMonitor) Stop() {
-	close(hm.stopChan)
-	hm.wg.Wait()
+	hm.BaseMonitor.Stop()
 }
 
 // getPublicIP 获取公网IP地址
@@ -99,14 +77,18 @@ func (hm *HardwareMonitor) getPublicIP() string {
 
 // monitorHardware 监控硬件信息
 func (hm *HardwareMonitor) monitorHardware() {
-	defer hm.wg.Done()
-	ticker := time.NewTicker(hm.interval)
+	defer hm.Done()
+	ticker := time.NewTicker(hm.GetInterval())
 	defer ticker.Stop()
 
 	// 立即执行一次
 	hm.collectAndLogHardwareInfo()
 
 	for {
+		if hm.IsStopped() {
+			return
+		}
+
 		select {
 		case <-hm.stopChan:
 			return
