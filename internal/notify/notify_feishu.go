@@ -23,7 +23,7 @@ type FeishuNotifier struct {
 // NewFeishuNotifier 创建新的飞书通知器
 func NewFeishuNotifier(webhookURL string, logger *zap.Logger) *FeishuNotifier {
 	return &FeishuNotifier{
-		BaseNotifier: NewBaseNotifier(),
+		BaseNotifier: NewBaseNotifier("飞书", "Feishu"),
 		webhookURL:   webhookURL,
 		logger:       logger,
 	}

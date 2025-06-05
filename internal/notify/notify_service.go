@@ -60,7 +60,8 @@ func (s *NotifyManager) processEvents(eventChan <-chan types.Event) {
 						err = n.SendLoginNotification(e.Username, e.IP, e.Timestamp, e.ServerInfo)
 						if err != nil {
 							s.logger.Error("发送登录通知失败",
-								zap.String("notifier", fmt.Sprintf("%T", n)),
+								zap.String("notifier_zh", n.GetNameZh()),
+								zap.String("notifier_en", n.GetNameEn()),
 								zap.Error(err),
 							)
 						}
@@ -68,7 +69,8 @@ func (s *NotifyManager) processEvents(eventChan <-chan types.Event) {
 						err = n.SendLogoutNotification(e.Username, e.IP, e.Timestamp, e.ServerInfo)
 						if err != nil {
 							s.logger.Error("发送登出通知失败",
-								zap.String("notifier", fmt.Sprintf("%T", n)),
+								zap.String("notifier_zh", n.GetNameZh()),
+								zap.String("notifier_en", n.GetNameEn()),
 								zap.Error(err),
 							)
 						}
@@ -79,41 +81,86 @@ func (s *NotifyManager) processEvents(eventChan <-chan types.Event) {
 	}
 }
 
-// InitNotifiers 初始化通知器
+// InitNotifiers 初始化所有通知器
 func (s *NotifyManager) InitNotifiers() error {
-	// 获取飞书配置
-	if viper.IsSet("notify.feishu.webhook_url") {
-		webhookURL := viper.GetString("notify.feishu.webhook_url")
-		if webhookURL != "" {
-			feishuNotifier := NewFeishuNotifier(webhookURL, s.logger)
-			s.notifiers = append(s.notifiers, feishuNotifier)
-			s.logger.Info("已初始化飞书通知器")
-
-			// 发送测试消息
-			if err := feishuNotifier.sendTestMessage(); err != nil {
-				s.logger.Error("飞书通知器测试失败", zap.Error(err))
-			}
-		}
+	// 预定义的通知器配置
+	notifierConfigs := []NotifierConfig{
+		{
+			Type:    NotifierTypeFeishu,
+			NameZh:  "飞书",
+			NameEn:  "Feishu",
+			Enabled: viper.GetBool("notify.feishu.enabled"),
+			Config: map[string]string{
+				"webhook_url": viper.GetString("notify.feishu.webhook_url"),
+			},
+		},
+		{
+			Type:    NotifierTypeDingTalk,
+			NameZh:  "钉钉",
+			NameEn:  "DingTalk",
+			Enabled: viper.GetBool("notify.dingtalk.enabled"),
+			Config: map[string]string{
+				"webhook_url": viper.GetString("notify.dingtalk.webhook_url"),
+				"secret":      viper.GetString("notify.dingtalk.secret"),
+			},
+		},
+		{
+			Type:    NotifierTypeTelegram,
+			NameZh:  "电报",
+			NameEn:  "Telegram",
+			Enabled: true, // Telegram 默认不使用 enabled 字段
+			Config: map[string]string{
+				"bot_token": viper.GetString("notify.telegram.bot_token"),
+				"chat_id":   viper.GetString("notify.telegram.chat_id"),
+			},
+		},
 	}
 
-	// 获取钉钉配置
-	if viper.IsSet("notify.dingtalk.webhook_url") {
-		webhookURL := viper.GetString("notify.dingtalk.webhook_url")
-		secret := viper.GetString("notify.dingtalk.secret")
-		if webhookURL != "" {
-			dingtalkNotifier := NewDingTalkNotifier(webhookURL, secret, s.logger)
-			s.notifiers = append(s.notifiers, dingtalkNotifier)
-			s.logger.Info("已初始化钉钉通知器")
-
-			// 发送测试消息
-			if err := dingtalkNotifier.sendTestMessage(); err != nil {
-				s.logger.Error("钉钉通知器测试失败", zap.Error(err))
-			}
+	// 遍历配置创建通知器
+	for _, config := range notifierConfigs {
+		if !config.Enabled {
+			s.logger.Info("通知器未启用，跳过",
+				zap.String("type", string(config.Type)),
+				zap.String("name_zh", config.NameZh),
+				zap.String("name_en", config.NameEn),
+			)
+			continue
 		}
+
+		notifier, err := CreateNotifier(config, s.logger)
+		if err != nil {
+			s.logger.Error("创建通知器失败",
+				zap.String("type", string(config.Type)),
+				zap.String("name_zh", config.NameZh),
+				zap.String("name_en", config.NameEn),
+				zap.Error(err),
+			)
+			continue
+		}
+
+		s.logger.Info("初始化通知器",
+			zap.String("type", string(config.Type)),
+			zap.String("name_zh", config.NameZh),
+			zap.String("name_en", config.NameEn),
+		)
+		s.notifiers = append(s.notifiers, notifier)
 	}
 
+	// 验证是否至少有一个通知器被初始化
 	if len(s.notifiers) == 0 {
 		return fmt.Errorf("没有配置任何通知器")
+	}
+
+	// 测试所有通知器
+	for _, notifier := range s.notifiers {
+		if err := notifier.sendTestMessage(); err != nil {
+			s.logger.Error("通知器测试失败",
+				zap.String("notifier_zh", notifier.GetNameZh()),
+				zap.String("notifier_en", notifier.GetNameEn()),
+				zap.Error(err),
+			)
+			return fmt.Errorf("通知器测试失败: %v", err)
+		}
 	}
 
 	return nil
