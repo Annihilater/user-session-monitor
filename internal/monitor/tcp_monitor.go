@@ -3,10 +3,8 @@ package monitor
 import (
 	"fmt"
 	"io/ioutil"
-	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -28,69 +26,49 @@ type TCPState struct {
 
 // TCPMonitor TCP 监控器
 type TCPMonitor struct {
-	logger   *zap.Logger
-	stopChan chan struct{}
-	wg       sync.WaitGroup
-	interval time.Duration // 监控间隔
-	runMode  string        // 运行模式：thread 或 goroutine
+	BaseMonitor
 }
 
 // NewTCPMonitor 创建新的 TCP 监控器
 func NewTCPMonitor(logger *zap.Logger, interval time.Duration, runMode string) *TCPMonitor {
 	return &TCPMonitor{
-		logger:   logger,
-		stopChan: make(chan struct{}),
-		interval: interval,
-		runMode:  runMode,
+		BaseMonitor: NewBaseMonitor("TCP监控", logger, interval, runMode),
 	}
 }
 
 // Start 启动 TCP 监控
 func (tm *TCPMonitor) Start() {
-	tm.wg.Add(1)
-	tm.logger.Info("启动 TCP 监控",
-		zap.String("run_mode", tm.runMode),
-	)
-
-	if tm.runMode == "thread" {
-		// 使用系统线程运行
-		go func() {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-			tm.monitor()
-		}()
-	} else {
-		// 使用普通协程运行
-		go tm.monitor()
-	}
+	tm.BaseMonitor.Start(tm.monitor)
 }
 
 // Stop 停止 TCP 监控
 func (tm *TCPMonitor) Stop() {
-	close(tm.stopChan)
-	tm.wg.Wait()
+	tm.BaseMonitor.Stop()
 }
 
 // monitor TCP 监控主循环
 func (tm *TCPMonitor) monitor() {
-	defer tm.wg.Done()
-
-	ticker := time.NewTicker(tm.interval)
+	defer tm.Done()
+	ticker := time.NewTicker(tm.GetInterval())
 	defer ticker.Stop()
 
 	for {
+		if tm.IsStopped() {
+			return
+		}
+
 		select {
 		case <-tm.stopChan:
 			return
 		case <-ticker.C:
 			state, err := tm.GetTCPState()
 			if err != nil {
-				tm.logger.Error("获取 TCP 状态失败", zap.Error(err))
+				tm.GetLogger().Error("获取 TCP 状态失败", zap.Error(err))
 				continue
 			}
 
 			// 记录 TCP 状态
-			tm.logger.Info("TCP 连接状态统计",
+			tm.GetLogger().Info("TCP 连接状态统计",
 				zap.Int("established", state.Established),
 				zap.Int("listen", state.Listen),
 				zap.Int("time_wait", state.TimeWait),
