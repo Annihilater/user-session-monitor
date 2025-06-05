@@ -3,6 +3,7 @@ package monitor
 import (
 	"fmt"
 	"io/ioutil"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,21 +32,40 @@ type TCPMonitor struct {
 	stopChan chan struct{}
 	wg       sync.WaitGroup
 	interval time.Duration // 监控间隔
+	runMode  string        // 运行模式：thread 或 goroutine
 }
 
 // NewTCPMonitor 创建新的 TCP 监控器
-func NewTCPMonitor(logger *zap.Logger, interval time.Duration) *TCPMonitor {
+func NewTCPMonitor(logger *zap.Logger, interval time.Duration, runMode string) *TCPMonitor {
 	return &TCPMonitor{
 		logger:   logger,
 		stopChan: make(chan struct{}),
 		interval: interval,
+		runMode:  runMode,
 	}
 }
 
 // Start 启动 TCP 监控
 func (tm *TCPMonitor) Start() {
-	tm.wg.Add(1)
-	go tm.monitor()
+	if tm.runMode == "thread" {
+		// 使用系统线程运行
+		tm.logger.Info("TCP 连接状态统计",
+			zap.String("run_mode", "thread"),
+		)
+		tm.wg.Add(1)
+		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			tm.monitor()
+		}()
+	} else {
+		// 使用普通协程运行
+		tm.logger.Info("TCP 连接状态统计",
+			zap.String("run_mode", "goroutine"),
+		)
+		tm.wg.Add(1)
+		go tm.monitor()
+	}
 }
 
 // Stop 停止 TCP 监控
