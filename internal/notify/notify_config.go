@@ -9,6 +9,7 @@ const (
 	NotifierTypeFeishu   NotifierType = "feishu"
 	NotifierTypeDingTalk NotifierType = "dingtalk"
 	NotifierTypeTelegram NotifierType = "telegram"
+	NotifierTypeEmail    NotifierType = "email" // 新增邮件通知器类型
 )
 
 // NotifierConfig 通知器配置
