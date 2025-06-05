@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -18,10 +19,11 @@ type SystemMonitor struct {
 	interval  time.Duration
 	stopChan  chan struct{}
 	diskPaths []string // 要监控的磁盘路径列表
+	runMode   string   // 运行模式：thread 或 goroutine
 }
 
 // NewSystemMonitor 创建新的系统监控器
-func NewSystemMonitor(logger *zap.Logger, interval time.Duration, diskPaths []string) *SystemMonitor {
+func NewSystemMonitor(logger *zap.Logger, interval time.Duration, diskPaths []string, runMode string) *SystemMonitor {
 	if len(diskPaths) == 0 {
 		diskPaths = []string{"/"} // 默认监控根目录
 	}
@@ -30,12 +32,21 @@ func NewSystemMonitor(logger *zap.Logger, interval time.Duration, diskPaths []st
 		interval:  interval,
 		stopChan:  make(chan struct{}),
 		diskPaths: diskPaths,
+		runMode:   runMode,
 	}
 }
 
 // Start 启动系统监控
 func (sm *SystemMonitor) Start() {
-	go sm.monitor()
+	if sm.runMode == "thread" {
+		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			sm.monitor()
+		}()
+	} else {
+		go sm.monitor()
+	}
 }
 
 // Stop 停止系统监控
