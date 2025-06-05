@@ -2,8 +2,6 @@ package monitor
 
 import (
 	"fmt"
-	"runtime"
-	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -16,12 +14,8 @@ import (
 
 // SystemMonitor 系统监控器
 type SystemMonitor struct {
-	logger    *zap.Logger
-	interval  time.Duration
-	stopChan  chan struct{}
-	wg        sync.WaitGroup
+	BaseMonitor
 	diskPaths []string // 要监控的磁盘路径列表
-	runMode   string   // 运行模式：thread 或 goroutine
 }
 
 // NewSystemMonitor 创建新的系统监控器
@@ -30,44 +24,32 @@ func NewSystemMonitor(logger *zap.Logger, interval time.Duration, diskPaths []st
 		diskPaths = []string{"/"} // 默认监控根目录
 	}
 	return &SystemMonitor{
-		logger:    logger,
-		interval:  interval,
-		stopChan:  make(chan struct{}),
-		diskPaths: diskPaths,
-		runMode:   runMode,
+		BaseMonitor: NewBaseMonitor("系统监控", logger, interval, runMode),
+		diskPaths:   diskPaths,
 	}
 }
 
 // Start 启动系统监控
 func (sm *SystemMonitor) Start() {
-	sm.wg.Add(1)
-	sm.logger.Info("启动系统监控",
-		zap.String("run_mode", sm.runMode),
-	)
-	if sm.runMode == "thread" {
-		go func() {
-			runtime.LockOSThread()
-			defer runtime.UnlockOSThread()
-			sm.monitor()
-		}()
-	} else {
-		go sm.monitor()
-	}
+	sm.BaseMonitor.Start(sm.monitor)
 }
 
 // Stop 停止系统监控
 func (sm *SystemMonitor) Stop() {
-	close(sm.stopChan)
-	sm.wg.Wait()
+	sm.BaseMonitor.Stop()
 }
 
 // monitor 系统监控主循环
 func (sm *SystemMonitor) monitor() {
-	defer sm.wg.Done()
-	ticker := time.NewTicker(sm.interval)
+	defer sm.Done()
+	ticker := time.NewTicker(sm.GetInterval())
 	defer ticker.Stop()
 
 	for {
+		if sm.IsStopped() {
+			return
+		}
+
 		select {
 		case <-sm.stopChan:
 			return
@@ -75,9 +57,9 @@ func (sm *SystemMonitor) monitor() {
 			// 获取 CPU 使用率
 			cpuPercent, err := cpu.Percent(0, false)
 			if err != nil {
-				sm.logger.Error("获取CPU使用率失败", zap.Error(err))
+				sm.GetLogger().Error("获取CPU使用率失败", zap.Error(err))
 			} else if len(cpuPercent) > 0 {
-				sm.logger.Info("CPU状态",
+				sm.GetLogger().Info("CPU状态",
 					zap.String("usage", fmt.Sprintf("%.2f%%", cpuPercent[0])),
 				)
 			}
@@ -85,7 +67,7 @@ func (sm *SystemMonitor) monitor() {
 			// 获取内存使用情况
 			memInfo, err := mem.VirtualMemory()
 			if err != nil {
-				sm.logger.Error("获取内存信息失败", zap.Error(err))
+				sm.GetLogger().Error("获取内存信息失败", zap.Error(err))
 			} else {
 				// 计算 Swap 使用量和使用率
 				swapUsed := memInfo.SwapTotal - memInfo.SwapFree
@@ -94,7 +76,7 @@ func (sm *SystemMonitor) monitor() {
 					swapUsedPercent = float64(swapUsed) / float64(memInfo.SwapTotal) * 100
 				}
 
-				sm.logger.Info("内存状态",
+				sm.GetLogger().Info("内存状态",
 					// 物理内存指标
 					zap.String("usage", fmt.Sprintf("%.2f%%", memInfo.UsedPercent)),
 					zap.String("total", formatBytes(memInfo.Total)),
@@ -112,13 +94,13 @@ func (sm *SystemMonitor) monitor() {
 			for _, path := range sm.diskPaths {
 				usage, err := disk.Usage(path)
 				if err != nil {
-					sm.logger.Error("获取磁盘使用情况失败",
+					sm.GetLogger().Error("获取磁盘使用情况失败",
 						zap.String("path", path),
 						zap.Error(err),
 					)
 					continue
 				}
-				sm.logger.Info("磁盘状态",
+				sm.GetLogger().Info("磁盘状态",
 					zap.String("path", path),
 					zap.String("usage", fmt.Sprintf("%.2f%%", usage.UsedPercent)),
 					zap.String("total", formatBytes(usage.Total)),
@@ -130,10 +112,10 @@ func (sm *SystemMonitor) monitor() {
 			// 获取系统运行时间
 			hostInfo, err := host.Info()
 			if err != nil {
-				sm.logger.Error("获取主机信息失败", zap.Error(err))
+				sm.GetLogger().Error("获取主机信息失败", zap.Error(err))
 			} else {
 				uptime := time.Duration(hostInfo.Uptime) * time.Second
-				sm.logger.Info("系统运行时间",
+				sm.GetLogger().Info("系统运行时间",
 					zap.String("uptime", formatUptime(uptime)),
 				)
 			}
@@ -141,9 +123,9 @@ func (sm *SystemMonitor) monitor() {
 			// 获取系统负载
 			loadInfo, err := load.Avg()
 			if err != nil {
-				sm.logger.Error("获取系统负载失败", zap.Error(err))
+				sm.GetLogger().Error("获取系统负载失败", zap.Error(err))
 			} else {
-				sm.logger.Info("系统负载",
+				sm.GetLogger().Info("系统负载",
 					zap.Float64("load1", loadInfo.Load1),
 					zap.Float64("load5", loadInfo.Load5),
 					zap.Float64("load15", loadInfo.Load15),
