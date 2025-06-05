@@ -51,7 +51,7 @@ func validateConfig(cfg *config.Config) error {
 }
 
 // NewFeishuNotifier 创建新的飞书通知器
-func NewFeishuNotifier(cfg *config.Config, logger *zap.Logger) (*FeishuNotifier, error) {
+func NewFeishuNotifier(cfg *config.Config, logger *zap.Logger) (notifier.Notifier, error) {
 	// 验证配置
 	if err := validateConfig(cfg); err != nil {
 		return nil, err
@@ -158,7 +158,11 @@ func (n *FeishuNotifier) sendMessage(msg *feishuMessage) error {
 	if err != nil {
 		return fmt.Errorf("发送请求失败：%v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			n.BaseNotifier.GetLogger().Error("关闭响应体失败", zap.Error(closeErr))
+		}
+	}()
 
 	// 检查响应状态码
 	if resp.StatusCode != http.StatusOK {
