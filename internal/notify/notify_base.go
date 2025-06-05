@@ -16,18 +16,38 @@ type Notifier interface {
 
 	// sendTestMessage 发送测试消息
 	sendTestMessage() error
+
+	// GetNameZh 获取通知器中文名
+	GetNameZh() string
+
+	// GetNameEn 获取通知器英文名
+	GetNameEn() string
 }
 
 // BaseNotifier 基础通知器
 type BaseNotifier struct {
 	stopChan chan struct{}
+	nameZh   string // 通知器中文名
+	nameEn   string // 通知器英文名
 }
 
 // NewBaseNotifier 创建基础通知器
-func NewBaseNotifier() *BaseNotifier {
+func NewBaseNotifier(nameZh, nameEn string) *BaseNotifier {
 	return &BaseNotifier{
 		stopChan: make(chan struct{}),
+		nameZh:   nameZh,
+		nameEn:   nameEn,
 	}
+}
+
+// GetNameZh 获取通知器中文名
+func (n *BaseNotifier) GetNameZh() string {
+	return n.nameZh
+}
+
+// GetNameEn 获取通知器英文名
+func (n *BaseNotifier) GetNameEn() string {
+	return n.nameEn
 }
 
 // Stop 停止通知器
