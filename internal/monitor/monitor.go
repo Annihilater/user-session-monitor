@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/Annihilater/user-session-monitor/internal/event"
+	"github.com/Annihilater/user-session-monitor/internal/types"
 )
 
 // 系统认证日志文件路径
@@ -139,7 +140,7 @@ var (
 	// 1. 用于关联登录和登出事件
 	// 2. 补充某些登出场景下缺失的 IP 和端口信息
 	// 3. 跟踪用户会话状态
-	loginRecords = make(map[string]loginRecord)
+	loginRecords = make(map[string]types.LoginRecord)
 
 	// 用于存储最近的登出记录，用于去重
 	// key 格式：username:ip:port
@@ -150,14 +151,6 @@ var (
 	// 登出事件的去重时间窗口
 	logoutDeduplicationWindow = 5 * time.Second
 )
-
-// loginRecord 存储单个登录会话的详细信息
-type loginRecord struct {
-	username      string    // 用户名
-	ip            string    // 登录源 IP
-	port          string    // 登录源端口
-	lastLoginTime time.Time // 最近一次登录时间
-}
 
 // makeLoginKey 生成登录记录的唯一键
 // 参数：
@@ -469,11 +462,11 @@ func (m *Monitor) processLine(line string) {
 		port := matches[3]
 
 		// 记录登录信息
-		loginRecords[makeLoginKey(username, ip, port)] = loginRecord{
-			username:      username,
-			ip:            ip,
-			port:          port,
-			lastLoginTime: time.Now(),
+		loginRecords[makeLoginKey(username, ip, port)] = types.LoginRecord{
+			Username:      username,
+			Ip:            ip,
+			Port:          port,
+			LastLoginTime: time.Now(),
 		}
 
 		m.logger.Info("detected login event",
@@ -490,8 +483,8 @@ func (m *Monitor) processLine(line string) {
 		}
 
 		// 发布登录事件
-		m.eventBus.Publish(event.Event{
-			Type:       event.EventTypeLogin,
+		m.eventBus.Publish(types.Event{
+			Type:       types.EventTypeLogin,
 			Username:   username,
 			IP:         ip,
 			Port:       port,
@@ -517,8 +510,8 @@ func (m *Monitor) processLine(line string) {
 				port = matches[2]
 				// 尝试根据 IP 和端口查找用户名
 				for _, record := range loginRecords {
-					if record.ip == ip && record.port == port {
-						username = record.username
+					if record.Ip == ip && record.Port == port {
+						username = record.Username
 						break
 					}
 				}
@@ -530,9 +523,9 @@ func (m *Monitor) processLine(line string) {
 				username = matches[1]
 				// 尝试根据用户名查找最近的登录记录
 				for _, record := range loginRecords {
-					if record.username == username {
-						ip = record.ip
-						port = record.port
+					if record.Username == username {
+						ip = record.Ip
+						port = record.Port
 						break
 					}
 				}
@@ -569,8 +562,8 @@ func (m *Monitor) processLine(line string) {
 			}
 
 			// 发布登出事件
-			m.eventBus.Publish(event.Event{
-				Type:       event.EventTypeLogout,
+			m.eventBus.Publish(types.Event{
+				Type:       types.EventTypeLogout,
 				Username:   username,
 				IP:         ip,
 				Port:       port,
