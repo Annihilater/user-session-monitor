@@ -34,7 +34,7 @@ var (
 
 	// 用于存储当前运行的监控器实例
 	currentMonitor  *monitor.Monitor
-	currentNotifier *notify.NotifyService
+	currentNotifier *notify.NotifyManager
 	currentLogger   *zap.Logger
 )
 
@@ -510,7 +510,7 @@ func startMonitor() error {
 	currentMonitor = mon
 
 	// 初始化通知服务
-	notifyService := notify.NewNotifyService(logger)
+	notifyService := notify.NewNotifyManager(logger)
 	if err := notifyService.InitNotifiers(); err != nil {
 		logger.Error("初始化通知器失败", zap.Error(err))
 		return fmt.Errorf("初始化通知器失败: %v", err)
