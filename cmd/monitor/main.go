@@ -15,8 +15,8 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/Annihilater/user-session-monitor/internal/event"
-	"github.com/Annihilater/user-session-monitor/internal/feishu"
 	"github.com/Annihilater/user-session-monitor/internal/monitor"
+	"github.com/Annihilater/user-session-monitor/internal/notify"
 )
 
 var (
@@ -34,7 +34,7 @@ var (
 
 	// 用于存储当前运行的监控器实例
 	currentMonitor  *monitor.Monitor
-	currentNotifier *feishu.Notifier
+	currentNotifier *notify.Notifier
 	currentLogger   *zap.Logger
 )
 
@@ -510,7 +510,7 @@ func startMonitor() error {
 	currentMonitor = mon
 
 	// 初始化飞书通知器
-	notifier := feishu.NewNotifier(
+	notifier := notify.NewNotifier(
 		viper.GetString("feishu.webhook_url"),
 		logger,
 	)
