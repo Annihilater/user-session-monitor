@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"runtime"
 	"time"
 
 	"go.uber.org/zap"
@@ -11,20 +12,30 @@ type HeartbeatMonitor struct {
 	logger   *zap.Logger
 	interval time.Duration
 	stopChan chan struct{}
+	runMode  string // 运行模式：thread 或 goroutine
 }
 
 // NewHeartbeatMonitor 创建新的心跳监控器
-func NewHeartbeatMonitor(logger *zap.Logger, interval time.Duration) *HeartbeatMonitor {
+func NewHeartbeatMonitor(logger *zap.Logger, interval time.Duration, runMode string) *HeartbeatMonitor {
 	return &HeartbeatMonitor{
 		logger:   logger,
 		interval: interval,
 		stopChan: make(chan struct{}),
+		runMode:  runMode,
 	}
 }
 
 // Start 启动心跳监控
 func (hm *HeartbeatMonitor) Start() {
-	go hm.monitor()
+	if hm.runMode == "thread" {
+		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			hm.monitor()
+		}()
+	} else {
+		go hm.monitor()
+	}
 }
 
 // Stop 停止心跳监控
