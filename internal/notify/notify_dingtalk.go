@@ -142,3 +142,13 @@ func (n *DingTalkNotifier) generateSign(timestamp int64) string {
 	h.Write([]byte(stringToSign))
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
+
+// sendTestMessage 发送测试消息以验证 webhook URL
+func (n *DingTalkNotifier) sendTestMessage() error {
+	title := "🔔 通知服务测试"
+	text := "### 🔔 通知服务测试\n\n" +
+		"**测试消息**\n\n" +
+		"服务启动时的 webhook 验证"
+
+	return n.sendMarkdown(title, text)
+}
