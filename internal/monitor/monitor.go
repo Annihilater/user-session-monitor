@@ -3,7 +3,6 @@ package monitor
 import (
 	"bufio"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -15,7 +14,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/Annihilater/user-session-monitor/internal/event"
-	"github.com/Annihilater/user-session-monitor/internal/types"
 )
 
 // 系统认证日志文件路径
@@ -173,52 +171,12 @@ func makeLoginKey(username, ip, port string) string {
 	return fmt.Sprintf("%s:%s:%s", username, ip, port)
 }
 
-func getServerInfo() (*types.ServerInfo, error) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return nil, fmt.Errorf("获取主机名失败: %v", err)
-	}
-
-	// 获取非回环IP地址
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return nil, fmt.Errorf("获取网络接口地址失败: %v", err)
-	}
-
-	var ip string
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				ip = ipnet.IP.String()
-				break
-			}
-		}
-	}
-
-	if ip == "" {
-		return nil, fmt.Errorf("未找到有效的IP地址")
-	}
-
-	// 获取操作系统类型
-	osType, err := detectOSType()
-	if err != nil {
-		osType = "未知"
-	}
-
-	return &types.ServerInfo{
-		Hostname: hostname,
-		IP:       ip,
-		OSType:   osType,
-	}, nil
-}
-
 // Monitor 监控器
 type Monitor struct {
 	logFile          string
 	eventBus         *event.EventBus
 	logger           *zap.Logger
 	stopChan         chan struct{}
-	serverInfo       *types.ServerInfo
 	runMode          string            // 运行模式：thread 或 goroutine
 	TCPMonitor       *TCPMonitor       // TCP 连接监控
 	SystemMonitor    *SystemMonitor    // 系统资源监控
@@ -226,6 +184,7 @@ type Monitor struct {
 	HeartbeatMonitor *HeartbeatMonitor // 心跳监控
 	NetworkMonitor   *NetworkMonitor   // 网络监控
 	ProcessMonitor   *ProcessMonitor   // 进程监控
+	ServerMonitor    *ServerMonitor    // 服务器信息监控
 }
 
 func NewMonitor(logFile string, eventBus *event.EventBus, logger *zap.Logger, runMode string) *Monitor {
@@ -267,12 +226,23 @@ func (m *Monitor) Start() error {
 		)
 	}
 
-	// 获取服务器信息
-	serverInfo, err := getServerInfo()
+	// 获取服务器监控配置
+	serverIntervalFloat := viper.GetFloat64("monitor.server.interval")
+	serverInterval := time.Duration(serverIntervalFloat * float64(time.Second))
+	if serverInterval < 100*time.Millisecond {
+		serverInterval = time.Second // 默认1秒，最小100毫秒
+		m.logger.Warn("服务器监控间隔太小，使用默认值", zap.Duration("interval", serverInterval))
+	}
+
+	// 启动服务器信息监控
+	m.ServerMonitor = NewServerMonitor(m.logger, serverInterval, m.runMode)
+	m.ServerMonitor.Start()
+
+	// 获取初始服务器信息用于日志记录
+	serverInfo, err := m.ServerMonitor.getServerInfo()
 	if err != nil {
 		return fmt.Errorf("获取服务器信息失败: %v", err)
 	}
-	m.serverInfo = serverInfo
 	m.logger.Info("服务器信息",
 		zap.String("hostname", serverInfo.Hostname),
 		zap.String("ip", serverInfo.IP),
@@ -406,6 +376,9 @@ func (m *Monitor) Stop() {
 	if m.ProcessMonitor != nil {
 		m.ProcessMonitor.Stop()
 	}
+	if m.ServerMonitor != nil {
+		m.ServerMonitor.Stop()
+	}
 }
 
 func (m *Monitor) monitor() {
@@ -509,6 +482,13 @@ func (m *Monitor) processLine(line string) {
 			zap.String("port", port),
 		)
 
+		// 获取当前服务器信息
+		serverInfo, err := m.ServerMonitor.getServerInfo()
+		if err != nil {
+			m.logger.Error("获取服务器信息失败", zap.Error(err))
+			return
+		}
+
 		// 发布登录事件
 		m.eventBus.Publish(event.Event{
 			Type:       event.EventTypeLogin,
@@ -516,7 +496,7 @@ func (m *Monitor) processLine(line string) {
 			IP:         ip,
 			Port:       port,
 			Timestamp:  time.Now(),
-			ServerInfo: m.serverInfo,
+			ServerInfo: serverInfo,
 		})
 		return
 	}
@@ -581,6 +561,13 @@ func (m *Monitor) processLine(line string) {
 				zap.String("port", port),
 			)
 
+			// 获取当前服务器信息
+			serverInfo, err := m.ServerMonitor.getServerInfo()
+			if err != nil {
+				m.logger.Error("获取服务器信息失败", zap.Error(err))
+				return
+			}
+
 			// 发布登出事件
 			m.eventBus.Publish(event.Event{
 				Type:       event.EventTypeLogout,
@@ -588,7 +575,7 @@ func (m *Monitor) processLine(line string) {
 				IP:         ip,
 				Port:       port,
 				Timestamp:  time.Now(),
-				ServerInfo: m.serverInfo,
+				ServerInfo: serverInfo,
 			})
 
 			// 清理登录记录
