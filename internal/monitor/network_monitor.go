@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"runtime"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/net"
@@ -12,6 +13,7 @@ type NetworkMonitor struct {
 	logger   *zap.Logger
 	interval time.Duration
 	stopChan chan struct{}
+	runMode  string // 运行模式：thread 或 goroutine
 
 	// 用于计算速度的上一次统计数据
 	lastStats net.IOCountersStat
@@ -19,17 +21,26 @@ type NetworkMonitor struct {
 }
 
 // NewNetworkMonitor 创建新的网络监控器
-func NewNetworkMonitor(logger *zap.Logger, interval time.Duration) *NetworkMonitor {
+func NewNetworkMonitor(logger *zap.Logger, interval time.Duration, runMode string) *NetworkMonitor {
 	return &NetworkMonitor{
 		logger:   logger,
 		interval: interval,
 		stopChan: make(chan struct{}),
+		runMode:  runMode,
 	}
 }
 
 // Start 启动网络监控
 func (nm *NetworkMonitor) Start() {
-	go nm.monitor()
+	if nm.runMode == "thread" {
+		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			nm.monitor()
+		}()
+	} else {
+		go nm.monitor()
+	}
 }
 
 // Stop 停止网络监控
