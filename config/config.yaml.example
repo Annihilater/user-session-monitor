@@ -2,6 +2,8 @@ feishu:
   webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url"
 
 monitor:
+  # 可选值: "thread" 或 "goroutine"
+  run_mode: "goroutine"
   # 认证日志文件路径
   # Debian/Ubuntu: /var/log/auth.log
   # CentOS/RHEL: /var/log/secure
