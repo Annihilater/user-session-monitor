@@ -2,6 +2,7 @@ package notify
 
 import (
 	"fmt"
+	"strings"
 
 	"go.uber.org/zap"
 )
@@ -51,5 +52,35 @@ func init() {
 			return nil, fmt.Errorf("telegram 通知器缺少 chat_id 配置")
 		}
 		return NewTelegramNotifier(botToken, chatID, logger), nil
+	})
+
+	// 注册邮件通知器
+	RegisterNotifier(NotifierTypeEmail, func(config NotifierConfig, logger *zap.Logger) (Notifier, error) {
+		host, exists := config.Config["host"]
+		if !exists || host == "" {
+			return nil, fmt.Errorf("邮件通知器缺少 host 配置")
+		}
+		port, exists := config.Config["port"]
+		if !exists || port == "" {
+			return nil, fmt.Errorf("邮件通知器缺少 port 配置")
+		}
+		username, exists := config.Config["username"]
+		if !exists || username == "" {
+			return nil, fmt.Errorf("邮件通知器缺少 username 配置")
+		}
+		password, exists := config.Config["password"]
+		if !exists || password == "" {
+			return nil, fmt.Errorf("邮件通知器缺少 password 配置")
+		}
+		from, exists := config.Config["from"]
+		if !exists || from == "" {
+			from = username // 如果未配置发件人，使用用户名
+		}
+		to, exists := config.Config["to"]
+		if !exists || to == "" {
+			return nil, fmt.Errorf("邮件通知器缺少 to 配置")
+		}
+		toList := strings.Split(to, ",")
+		return NewEmailNotifier(host, port, username, password, from, toList, logger), nil
 	})
 }
