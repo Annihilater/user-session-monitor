@@ -611,6 +611,22 @@ func getMaskedConfig() map[string]interface{} {
 				telegramConfig["chat_id"] = "******"
 			}
 		}
+
+		// 处理邮件配置
+		if emailConfig, ok := notifyConfig["email"].(map[string]interface{}); ok {
+			if _, exists := emailConfig["password"]; exists {
+				emailConfig["password"] = "******"
+			}
+			if _, exists := emailConfig["username"]; exists {
+				emailConfig["username"] = "******"
+			}
+			if _, exists := emailConfig["from"]; exists {
+				emailConfig["from"] = "******"
+			}
+			if _, exists := emailConfig["to"]; exists {
+				emailConfig["to"] = "******"
+			}
+		}
 	}
 
 	return config
