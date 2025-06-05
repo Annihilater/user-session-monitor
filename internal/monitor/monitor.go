@@ -219,6 +219,7 @@ type Monitor struct {
 	logger           *zap.Logger
 	stopChan         chan struct{}
 	serverInfo       *types.ServerInfo
+	runMode          string            // 运行模式：thread 或 goroutine
 	TCPMonitor       *TCPMonitor       // TCP 连接监控
 	SystemMonitor    *SystemMonitor    // 系统资源监控
 	HardwareMonitor  *HardwareMonitor  // 硬件信息监控
@@ -227,12 +228,17 @@ type Monitor struct {
 	ProcessMonitor   *ProcessMonitor   // 进程监控
 }
 
-func NewMonitor(logFile string, eventBus *event.EventBus, logger *zap.Logger) *Monitor {
+func NewMonitor(logFile string, eventBus *event.EventBus, logger *zap.Logger, runMode string) *Monitor {
+	// 默认使用协程模式
+	if runMode != "thread" && runMode != "goroutine" {
+		runMode = "goroutine"
+	}
 	return &Monitor{
 		logFile:  logFile,
 		eventBus: eventBus,
 		logger:   logger,
 		stopChan: make(chan struct{}),
+		runMode:  runMode,
 	}
 }
 
@@ -330,11 +336,11 @@ func (m *Monitor) Start() error {
 	)
 
 	// 启动 TCP 监控
-	m.TCPMonitor = NewTCPMonitor(m.logger, tcpInterval)
+	m.TCPMonitor = NewTCPMonitor(m.logger, tcpInterval, m.runMode)
 	m.TCPMonitor.Start()
 
 	// 启动心跳监控
-	m.HeartbeatMonitor = NewHeartbeatMonitor(m.logger, heartbeatInterval)
+	m.HeartbeatMonitor = NewHeartbeatMonitor(m.logger, heartbeatInterval, m.runMode)
 	m.HeartbeatMonitor.Start()
 
 	// 获取网络监控配置
@@ -346,7 +352,7 @@ func (m *Monitor) Start() error {
 	}
 
 	// 启动网络监控
-	m.NetworkMonitor = NewNetworkMonitor(m.logger, networkInterval)
+	m.NetworkMonitor = NewNetworkMonitor(m.logger, networkInterval, m.runMode)
 	m.NetworkMonitor.Start()
 
 	// 获取进程监控配置
@@ -358,15 +364,15 @@ func (m *Monitor) Start() error {
 	}
 
 	// 启动进程监控
-	m.ProcessMonitor = NewProcessMonitor(m.logger, processInterval)
+	m.ProcessMonitor = NewProcessMonitor(m.logger, processInterval, m.runMode)
 	m.ProcessMonitor.Start()
 
 	// 启动系统资源监控
-	m.SystemMonitor = NewSystemMonitor(m.logger, sysInterval, diskPaths)
+	m.SystemMonitor = NewSystemMonitor(m.logger, sysInterval, diskPaths, m.runMode)
 	m.SystemMonitor.Start()
 
 	// 启动硬件信息监控
-	m.HardwareMonitor = NewHardwareMonitor(m.logger, hwInterval, hwDiskPaths)
+	m.HardwareMonitor = NewHardwareMonitor(m.logger, hwInterval, hwDiskPaths, m.runMode)
 	m.HardwareMonitor.Start()
 
 	// 启动监控协程
