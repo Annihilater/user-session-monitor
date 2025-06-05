@@ -103,7 +103,11 @@ func (n *DingTalkNotifier) sendMarkdown(title, text string) error {
 	if err != nil {
 		return fmt.Errorf("发送请求失败: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			n.logger.Error("关闭响应体失败", zap.Error(err))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("请求失败，状态码: %d", resp.StatusCode)
