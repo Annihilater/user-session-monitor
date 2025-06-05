@@ -481,9 +481,10 @@ func startMonitor() error {
 	)
 
 	// 输出配置内容
+	maskedConfig := getMaskedConfig()
 	logger.Info("当前配置",
-		zap.Any("monitor", viper.Get("monitor")),
-		zap.Any("notify", viper.Get("notify")),
+		zap.Any("monitor", maskedConfig["monitor"]),
+		zap.Any("notify", maskedConfig["notify"]),
 	)
 
 	// 创建事件总线
@@ -576,4 +577,31 @@ func handleTCPStatus() error {
 	fmt.Printf("————————————————\n")
 
 	return nil
+}
+
+// getMaskedConfig 获取脱敏后的配置
+func getMaskedConfig() map[string]interface{} {
+	config := viper.AllSettings()
+
+	// 处理通知配置的脱敏
+	if notifyConfig, ok := config["notify"].(map[string]interface{}); ok {
+		// 处理飞书配置
+		if feishuConfig, ok := notifyConfig["feishu"].(map[string]interface{}); ok {
+			if _, exists := feishuConfig["webhook_url"]; exists {
+				feishuConfig["webhook_url"] = "******"
+			}
+		}
+
+		// 处理钉钉配置
+		if dingtalkConfig, ok := notifyConfig["dingtalk"].(map[string]interface{}); ok {
+			if _, exists := dingtalkConfig["webhook_url"]; exists {
+				dingtalkConfig["webhook_url"] = "******"
+			}
+			if _, exists := dingtalkConfig["secret"]; exists {
+				dingtalkConfig["secret"] = "******"
+			}
+		}
+	}
+
+	return config
 }
