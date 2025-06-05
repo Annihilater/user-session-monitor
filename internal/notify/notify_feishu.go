@@ -122,7 +122,11 @@ func (n *FeishuNotifier) sendMessage(text string) error {
 	if err != nil {
 		return fmt.Errorf("发送请求失败: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			n.logger.Error("关闭响应体失败", zap.Error(err))
+		}
+	}()
 
 	// 读取响应内容
 	body, err := io.ReadAll(resp.Body)
