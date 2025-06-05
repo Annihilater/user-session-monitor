@@ -3,6 +3,7 @@ package monitor
 import (
 	"runtime"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/mem"
@@ -27,6 +28,7 @@ type ProcessMonitor struct {
 	logger   *zap.Logger
 	interval time.Duration
 	stopChan chan struct{}
+	wg       sync.WaitGroup
 	runMode  string // 运行模式：thread 或 goroutine
 }
 
@@ -42,6 +44,10 @@ func NewProcessMonitor(logger *zap.Logger, interval time.Duration, runMode strin
 
 // Start 启动进程监控
 func (pm *ProcessMonitor) Start() {
+	pm.wg.Add(1)
+	pm.logger.Info("启动进程监控",
+		zap.String("run_mode", pm.runMode),
+	)
 	if pm.runMode == "thread" {
 		go func() {
 			runtime.LockOSThread()
@@ -56,6 +62,7 @@ func (pm *ProcessMonitor) Start() {
 // Stop 停止进程监控
 func (pm *ProcessMonitor) Stop() {
 	close(pm.stopChan)
+	pm.wg.Wait()
 }
 
 // getTopProcesses 获取 CPU 占用最高的进程
@@ -134,6 +141,7 @@ func (pm *ProcessMonitor) getTopProcesses(count int) ([]ProcessInfo, error) {
 
 // monitor 进程监控主循环
 func (pm *ProcessMonitor) monitor() {
+	defer pm.wg.Done()
 	ticker := time.NewTicker(pm.interval)
 	defer ticker.Stop()
 
