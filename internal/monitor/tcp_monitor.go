@@ -47,12 +47,13 @@ func NewTCPMonitor(logger *zap.Logger, interval time.Duration, runMode string) *
 
 // Start 启动 TCP 监控
 func (tm *TCPMonitor) Start() {
+	tm.wg.Add(1)
+	tm.logger.Info("启动 TCP 监控",
+		zap.String("run_mode", tm.runMode),
+	)
+
 	if tm.runMode == "thread" {
 		// 使用系统线程运行
-		tm.logger.Info("TCP 连接状态统计",
-			zap.String("run_mode", "thread"),
-		)
-		tm.wg.Add(1)
 		go func() {
 			runtime.LockOSThread()
 			defer runtime.UnlockOSThread()
@@ -60,10 +61,6 @@ func (tm *TCPMonitor) Start() {
 		}()
 	} else {
 		// 使用普通协程运行
-		tm.logger.Info("TCP 连接状态统计",
-			zap.String("run_mode", "goroutine"),
-		)
-		tm.wg.Add(1)
 		go tm.monitor()
 	}
 }
