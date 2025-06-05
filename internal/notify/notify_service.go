@@ -75,8 +75,11 @@ func (s *NotifyManager) InitNotifiers() error {
 
 // Start 启动通知服务
 func (s *NotifyManager) Start(eventChan <-chan types.Event) {
-	s.wg.Add(1)
-	go s.processEvents(eventChan)
+	// 为每个通知器启动独立的处理协程
+	for _, notifier := range s.notifiers {
+		s.wg.Add(1)
+		go s.processEventsForNotifier(eventChan, notifier)
+	}
 }
 
 // Stop 停止通知服务
@@ -85,40 +88,46 @@ func (s *NotifyManager) Stop() {
 	s.wg.Wait()
 }
 
-// processEvents 处理事件
-func (s *NotifyManager) processEvents(eventChan <-chan types.Event) {
+// processEventsForNotifier 为单个通知器处理事件
+func (s *NotifyManager) processEventsForNotifier(eventChan <-chan types.Event, notifier Notifier) {
 	defer s.wg.Done()
+
+	// 获取通知器类型名称用于日志
+	notifierType := fmt.Sprintf("%T", notifier)
 
 	for {
 		select {
 		case <-s.stopChan:
+			s.logger.Info("通知器停止工作",
+				zap.String("notifier_type", notifierType),
+			)
 			return
 		case evt := <-eventChan:
-			// 并发发送通知，带重试机制
-			var wg sync.WaitGroup
-			for _, notifier := range s.notifiers {
-				wg.Add(1)
-				go func(n Notifier) {
-					defer wg.Done()
-					// 重试3次
-					for i := 0; i < 3; i++ {
-						if err := s.handleEvent(n, evt); err != nil {
-							s.logger.Error("发送通知失败，准备重试",
-								zap.Error(err),
-								zap.Int("retry", i+1),
-								zap.Any("event", evt),
-							)
-							time.Sleep(time.Second * time.Duration(i+1))
-							continue
-						}
-						return
+			// 在独立的协程中处理消息发送，这样不会阻塞事件接收
+			go func(e types.Event) {
+				// 重试3次
+				for i := 0; i < 3; i++ {
+					if err := s.handleEvent(notifier, e); err != nil {
+						s.logger.Error("发送通知失败，准备重试",
+							zap.String("notifier_type", notifierType),
+							zap.Error(err),
+							zap.Int("retry", i+1),
+							zap.Any("event", e),
+						)
+						time.Sleep(time.Second * time.Duration(i+1))
+						continue
 					}
-					s.logger.Error("发送通知最终失败",
-						zap.Any("event", evt),
+					s.logger.Info("发送通知成功",
+						zap.String("notifier_type", notifierType),
+						zap.Any("event_type", e.Type),
 					)
-				}(notifier)
-			}
-			wg.Wait()
+					return
+				}
+				s.logger.Error("发送通知最终失败",
+					zap.String("notifier_type", notifierType),
+					zap.Any("event", evt),
+				)
+			}(evt)
 		}
 	}
 }
