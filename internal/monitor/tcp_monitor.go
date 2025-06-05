@@ -8,21 +8,9 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-)
 
-// TCPState TCP 连接状态
-type TCPState struct {
-	Established int // 已建立的连接
-	Listen      int // 监听中的连接
-	TimeWait    int // 等待关闭的连接
-	SynRecv     int // 接收到 SYN 的连接
-	CloseWait   int // 等待关闭的连接
-	LastAck     int // 等待最后确认的连接
-	SynSent     int // 已发送 SYN 的连接
-	Closing     int // 正在关闭的连接
-	FinWait1    int // 等待对方 FIN 的连接
-	FinWait2    int // 等待连接关闭的连接
-}
+	"github.com/Annihilater/user-session-monitor/internal/types"
+)
 
 // TCPMonitor TCP 监控器
 type TCPMonitor struct {
@@ -85,7 +73,7 @@ func (tm *TCPMonitor) monitor() {
 }
 
 // GetTCPState 获取当前 TCP 连接状态
-func (tm *TCPMonitor) GetTCPState() (*TCPState, error) {
+func (tm *TCPMonitor) GetTCPState() (*types.TCPState, error) {
 	// 读取 /proc/net/tcp 文件
 	content, err := ioutil.ReadFile("/proc/net/tcp")
 	if err != nil {
@@ -93,7 +81,7 @@ func (tm *TCPMonitor) GetTCPState() (*TCPState, error) {
 	}
 
 	lines := strings.Split(string(content), "\n")
-	state := &TCPState{}
+	state := &types.TCPState{}
 
 	// 跳过标题行
 	for _, line := range lines[1:] {
