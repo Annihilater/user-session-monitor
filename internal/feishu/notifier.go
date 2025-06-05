@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Annihilater/user-session-monitor/internal/event"
-	"github.com/Annihilater/user-session-monitor/internal/types"
 	"go.uber.org/zap"
+
+	"github.com/Annihilater/user-session-monitor/internal/types"
 )
 
 type Notifier struct {
@@ -34,7 +34,7 @@ func NewNotifier(webhookURL string, logger *zap.Logger) *Notifier {
 }
 
 // Start 启动通知处理器
-func (n *Notifier) Start(eventChan <-chan event.Event) {
+func (n *Notifier) Start(eventChan <-chan types.Event) {
 	n.wg.Add(1)
 	go n.processEvents(eventChan)
 }
@@ -46,7 +46,7 @@ func (n *Notifier) Stop() {
 }
 
 // processEvents 处理事件
-func (n *Notifier) processEvents(eventChan <-chan event.Event) {
+func (n *Notifier) processEvents(eventChan <-chan types.Event) {
 	defer n.wg.Done()
 
 	for {
@@ -65,16 +65,16 @@ func (n *Notifier) processEvents(eventChan <-chan event.Event) {
 }
 
 // handleEvent 处理单个事件
-func (n *Notifier) handleEvent(evt event.Event) error {
+func (n *Notifier) handleEvent(evt types.Event) error {
 	switch evt.Type {
-	case event.EventTypeLogin:
+	case types.EventTypeLogin:
 		return n.SendLoginNotification(
 			evt.Username,
 			fmt.Sprintf("%s:%s", evt.IP, evt.Port),
 			evt.Timestamp,
 			evt.ServerInfo,
 		)
-	case event.EventTypeLogout:
+	case types.EventTypeLogout:
 		return n.SendLogoutNotification(
 			evt.Username,
 			fmt.Sprintf("%s:%s", evt.IP, evt.Port),
