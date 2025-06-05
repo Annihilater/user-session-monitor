@@ -13,15 +13,17 @@ import (
 	"github.com/Annihilater/user-session-monitor/internal/types"
 )
 
-type Notifier struct {
+// FeishuNotifier 飞书通知器
+type FeishuNotifier struct {
 	webhookURL string
 	logger     *zap.Logger
 	stopChan   chan struct{}
 	wg         sync.WaitGroup
 }
 
-func NewNotifier(webhookURL string, logger *zap.Logger) *Notifier {
-	return &Notifier{
+// NewFeishuNotifier 创建新的飞书通知器
+func NewFeishuNotifier(webhookURL string, logger *zap.Logger) *FeishuNotifier {
+	return &FeishuNotifier{
 		webhookURL: webhookURL,
 		logger:     logger,
 		stopChan:   make(chan struct{}),
@@ -29,19 +31,19 @@ func NewNotifier(webhookURL string, logger *zap.Logger) *Notifier {
 }
 
 // Start 启动通知处理器
-func (n *Notifier) Start(eventChan <-chan types.Event) {
+func (n *FeishuNotifier) Start(eventChan <-chan types.Event) {
 	n.wg.Add(1)
 	go n.processEvents(eventChan)
 }
 
 // Stop 停止通知处理器
-func (n *Notifier) Stop() {
+func (n *FeishuNotifier) Stop() {
 	close(n.stopChan)
 	n.wg.Wait()
 }
 
 // processEvents 处理事件
-func (n *Notifier) processEvents(eventChan <-chan types.Event) {
+func (n *FeishuNotifier) processEvents(eventChan <-chan types.Event) {
 	defer n.wg.Done()
 
 	for {
@@ -60,7 +62,7 @@ func (n *Notifier) processEvents(eventChan <-chan types.Event) {
 }
 
 // handleEvent 处理单个事件
-func (n *Notifier) handleEvent(evt types.Event) error {
+func (n *FeishuNotifier) handleEvent(evt types.Event) error {
 	switch evt.Type {
 	case types.TypeLogin:
 		return n.SendLoginNotification(
@@ -81,7 +83,7 @@ func (n *Notifier) handleEvent(evt types.Event) error {
 	}
 }
 
-func (n *Notifier) SendLoginNotification(username, ip string, loginTime time.Time, serverInfo *types.ServerInfo) error {
+func (n *FeishuNotifier) SendLoginNotification(username, ip string, loginTime time.Time, serverInfo *types.ServerInfo) error {
 	msg := types.NotifyMessage{
 		MsgType: "text",
 		Content: map[string]interface{}{
@@ -96,7 +98,7 @@ func (n *Notifier) SendLoginNotification(username, ip string, loginTime time.Tim
 	return n.sendMessage(msg)
 }
 
-func (n *Notifier) SendLogoutNotification(username, ip string, logoutTime time.Time, serverInfo *types.ServerInfo) error {
+func (n *FeishuNotifier) SendLogoutNotification(username, ip string, logoutTime time.Time, serverInfo *types.ServerInfo) error {
 	msg := types.NotifyMessage{
 		MsgType: "text",
 		Content: map[string]interface{}{
@@ -111,7 +113,7 @@ func (n *Notifier) SendLogoutNotification(username, ip string, logoutTime time.T
 	return n.sendMessage(msg)
 }
 
-func (n *Notifier) sendMessage(msg types.NotifyMessage) error {
+func (n *FeishuNotifier) sendMessage(msg types.NotifyMessage) error {
 	payload, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("marshal message failed: %v", err)
