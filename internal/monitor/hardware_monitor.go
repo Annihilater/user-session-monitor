@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -20,6 +21,7 @@ type HardwareMonitor struct {
 	logger    *zap.Logger
 	interval  time.Duration
 	stopChan  chan struct{}
+	wg        sync.WaitGroup
 	diskPaths []string
 	runMode   string // 运行模式：thread 或 goroutine
 }
@@ -40,6 +42,10 @@ func NewHardwareMonitor(logger *zap.Logger, interval time.Duration, diskPaths []
 
 // Start 启动硬件信息监控
 func (hm *HardwareMonitor) Start() {
+	hm.wg.Add(1)
+	hm.logger.Info("启动硬件监控",
+		zap.String("run_mode", hm.runMode),
+	)
 	if hm.runMode == "thread" {
 		go func() {
 			runtime.LockOSThread()
@@ -54,6 +60,7 @@ func (hm *HardwareMonitor) Start() {
 // Stop 停止硬件信息监控
 func (hm *HardwareMonitor) Stop() {
 	close(hm.stopChan)
+	hm.wg.Wait()
 }
 
 // getPublicIP 获取公网IP地址
@@ -92,6 +99,7 @@ func (hm *HardwareMonitor) getPublicIP() string {
 
 // monitorHardware 监控硬件信息
 func (hm *HardwareMonitor) monitorHardware() {
+	defer hm.wg.Done()
 	ticker := time.NewTicker(hm.interval)
 	defer ticker.Stop()
 
