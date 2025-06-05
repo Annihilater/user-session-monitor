@@ -34,3 +34,35 @@ const (
 	EventTypeLogin EventType = iota
 	EventTypeLogout
 )
+
+// TCPState TCP 连接状态
+type TCPState struct {
+	Established int // 已建立的连接
+	Listen      int // 监听中的连接
+	TimeWait    int // 等待关闭的连接
+	SynRecv     int // 接收到 SYN 的连接
+	CloseWait   int // 等待关闭的连接
+	LastAck     int // 等待最后确认的连接
+	SynSent     int // 已发送 SYN 的连接
+	Closing     int // 正在关闭的连接
+	FinWait1    int // 等待对方 FIN 的连接
+	FinWait2    int // 等待连接关闭的连接
+}
+
+// ProcessInfo 进程信息
+type ProcessInfo struct {
+	PID           int32
+	Name          string
+	Command       string
+	CPUPercent    float64
+	MemoryUsage   uint64
+	MemoryPercent float32
+	Username      string
+	CreateTime    time.Time
+}
+
+// NotifyMessage 通知消息结构
+type NotifyMessage struct {
+	MsgType string                 `json:"msg_type"`
+	Content map[string]interface{} `json:"content"`
+}
