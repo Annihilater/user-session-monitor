@@ -1,6 +1,3 @@
-feishu:
-  webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-url"
-
 monitor:
   # 可选值: "thread" 或 "goroutine"
   run_mode: "goroutine"
@@ -22,4 +19,24 @@ monitor:
       - "/"
   heartbeat:
     interval: 0.5 # 心跳监控间隔（秒）
-    
+
+# 通知配置
+notify:
+  # 飞书通知配置
+  feishu:
+    enabled: true
+    webhook_url: "https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxx"
+
+  # 钉钉通知配置
+  dingtalk:
+    enabled: true
+    webhook_url: "https://oapi.dingtalk.com/robot/send?access_token=xxxxxx"
+    # 安全设置的签名密钥，如果没有可以留空
+    secret: "xxxxxx"
+
+  # Telegram 通知配置
+  telegram:
+    # 从 BotFather 获取的机器人令牌
+    bot_token: "xxxxxx:xxxxxx"
+    # 目标聊天 ID（群组或个人）
+    chat_id: "-xxxxxx" 
