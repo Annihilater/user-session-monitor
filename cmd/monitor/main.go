@@ -487,7 +487,7 @@ func startMonitor() error {
 	)
 
 	// 创建事件总线
-	eventBus := event.NewEventBus(100) // 设置适当的缓冲区大小
+	eventBus := event.NewBus(100) // 设置适当的缓冲区大小
 
 	// 获取运行模式配置
 	runMode := strings.ToLower(viper.GetString("monitor.run_mode"))
