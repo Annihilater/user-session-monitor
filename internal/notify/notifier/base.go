@@ -73,3 +73,8 @@ func (n *BaseNotifier) InitializeWithTest(testFunc func() error) error {
 		return fmt.Errorf("测试消息发送超时（%v）", n.timeout)
 	}
 }
+
+// GetLogger 获取日志器
+func (n *BaseNotifier) GetLogger() *zap.Logger {
+	return n.logger
+}
