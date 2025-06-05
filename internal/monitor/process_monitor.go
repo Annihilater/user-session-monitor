@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"runtime"
 	"sort"
 	"time"
 
@@ -26,20 +27,30 @@ type ProcessMonitor struct {
 	logger   *zap.Logger
 	interval time.Duration
 	stopChan chan struct{}
+	runMode  string // 运行模式：thread 或 goroutine
 }
 
 // NewProcessMonitor 创建新的进程监控器
-func NewProcessMonitor(logger *zap.Logger, interval time.Duration) *ProcessMonitor {
+func NewProcessMonitor(logger *zap.Logger, interval time.Duration, runMode string) *ProcessMonitor {
 	return &ProcessMonitor{
 		logger:   logger,
 		interval: interval,
 		stopChan: make(chan struct{}),
+		runMode:  runMode,
 	}
 }
 
 // Start 启动进程监控
 func (pm *ProcessMonitor) Start() {
-	go pm.monitor()
+	if pm.runMode == "thread" {
+		go func() {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+			pm.monitor()
+		}()
+	} else {
+		go pm.monitor()
+	}
 }
 
 // Stop 停止进程监控
