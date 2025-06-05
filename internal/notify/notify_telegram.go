@@ -90,11 +90,15 @@ func (n *TelegramNotifier) sendMessage(text string) error {
 	if err != nil {
 		return fmt.Errorf("发送请求失败: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			n.logger.Error("关闭响应体失败", zap.Error(err))
+		}
+	}()
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Telegram API 返回错误状态码: %d", resp.StatusCode)
+		return fmt.Errorf("telegram API 返回错误状态码: %d", resp.StatusCode)
 	}
 
 	n.logger.Debug("Telegram 消息发送成功",
