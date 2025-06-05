@@ -3,7 +3,6 @@ package notify
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -29,6 +28,8 @@ func NewNotifyManager(logger *zap.Logger) *NotifyManager {
 
 // InitNotifiers 初始化所有已配置的通知器
 func (s *NotifyManager) InitNotifiers() error {
+	var initErrors []string
+
 	// 检查飞书通知器配置
 	if viper.GetBool("notify.feishu.enabled") {
 		webhookURL := viper.GetString("notify.feishu.webhook_url")
@@ -41,9 +42,10 @@ func (s *NotifyManager) InitNotifiers() error {
 					zap.String("url", webhookURL),
 					zap.Error(err),
 				)
-				return fmt.Errorf("飞书 webhook URL 验证失败: %v", err)
+				initErrors = append(initErrors, fmt.Sprintf("飞书 webhook URL 验证失败: %v", err))
+			} else {
+				s.notifiers = append(s.notifiers, notifier)
 			}
-			s.notifiers = append(s.notifiers, notifier)
 		}
 	}
 
@@ -60,13 +62,17 @@ func (s *NotifyManager) InitNotifiers() error {
 					zap.String("url", webhookURL),
 					zap.Error(err),
 				)
-				return fmt.Errorf("钉钉 webhook URL 验证失败: %v", err)
+				initErrors = append(initErrors, fmt.Sprintf("钉钉 webhook URL 验证失败: %v", err))
+			} else {
+				s.notifiers = append(s.notifiers, notifier)
 			}
-			s.notifiers = append(s.notifiers, notifier)
 		}
 	}
 
 	if len(s.notifiers) == 0 {
+		if len(initErrors) > 0 {
+			return fmt.Errorf("所有通知器初始化失败: %v", initErrors)
+		}
 		s.logger.Warn("没有配置任何通知器")
 	}
 
@@ -78,7 +84,17 @@ func (s *NotifyManager) Start(eventChan <-chan types.Event) {
 	// 为每个通知器启动独立的处理协程
 	for _, notifier := range s.notifiers {
 		s.wg.Add(1)
-		go s.processEventsForNotifier(eventChan, notifier)
+		// 为每个通知器创建独立的事件通道
+		notifierChan := make(chan types.Event, 100)
+		go s.processEventsForNotifier(notifierChan, notifier)
+
+		// 启动一个协程来转发事件
+		go func(ch chan<- types.Event) {
+			for evt := range eventChan {
+				ch <- evt
+			}
+			close(ch)
+		}(notifierChan)
 	}
 }
 
@@ -102,31 +118,27 @@ func (s *NotifyManager) processEventsForNotifier(eventChan <-chan types.Event, n
 				zap.String("notifier_type", notifierType),
 			)
 			return
-		case evt := <-eventChan:
+		case evt, ok := <-eventChan:
+			if !ok {
+				s.logger.Info("事件通道已关闭",
+					zap.String("notifier_type", notifierType),
+				)
+				return
+			}
 			// 在独立的协程中处理消息发送，这样不会阻塞事件接收
 			go func(e types.Event) {
-				// 重试3次
-				for i := 0; i < 3; i++ {
-					if err := s.handleEvent(notifier, e); err != nil {
-						s.logger.Error("发送通知失败，准备重试",
-							zap.String("notifier_type", notifierType),
-							zap.Error(err),
-							zap.Int("retry", i+1),
-							zap.Any("event", e),
-						)
-						time.Sleep(time.Second * time.Duration(i+1))
-						continue
-					}
+				if err := s.handleEvent(notifier, e); err != nil {
+					s.logger.Error("发送通知失败",
+						zap.String("notifier_type", notifierType),
+						zap.Error(err),
+						zap.Any("event", e),
+					)
+				} else {
 					s.logger.Info("发送通知成功",
 						zap.String("notifier_type", notifierType),
 						zap.Any("event_type", e.Type),
 					)
-					return
 				}
-				s.logger.Error("发送通知最终失败",
-					zap.String("notifier_type", notifierType),
-					zap.Any("event", evt),
-				)
 			}(evt)
 		}
 	}
