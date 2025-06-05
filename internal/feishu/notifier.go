@@ -62,14 +62,14 @@ func (n *Notifier) processEvents(eventChan <-chan types.Event) {
 // handleEvent 处理单个事件
 func (n *Notifier) handleEvent(evt types.Event) error {
 	switch evt.Type {
-	case types.EventTypeLogin:
+	case types.TypeLogin:
 		return n.SendLoginNotification(
 			evt.Username,
 			fmt.Sprintf("%s:%s", evt.IP, evt.Port),
 			evt.Timestamp,
 			evt.ServerInfo,
 		)
-	case types.EventTypeLogout:
+	case types.TypeLogout:
 		return n.SendLogoutNotification(
 			evt.Username,
 			fmt.Sprintf("%s:%s", evt.IP, evt.Port),
