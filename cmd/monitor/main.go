@@ -489,11 +489,20 @@ func startMonitor() error {
 	// 创建事件总线
 	eventBus := event.NewEventBus(100) // 设置适当的缓冲区大小
 
+	// 获取运行模式配置
+	runMode := viper.GetString("monitor.run_mode")
+	if runMode != "thread" && runMode != "goroutine" {
+		runMode = "goroutine" // 默认使用协程模式
+		logger.Info("未指定运行模式或运行模式无效，使用默认协程模式")
+	}
+	logger.Info("使用运行模式", zap.String("mode", runMode))
+
 	// 初始化监控器
 	mon := monitor.NewMonitor(
 		viper.GetString("monitor.log_file"),
 		eventBus,
 		logger,
+		runMode,
 	)
 	currentMonitor = mon
 
