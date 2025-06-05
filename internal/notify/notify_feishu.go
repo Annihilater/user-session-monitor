@@ -142,3 +142,32 @@ func (n *FeishuNotifier) sendMessage(msg types.NotifyMessage) error {
 
 	return nil
 }
+
+// sendTestMessage 发送测试消息以验证 webhook URL
+func (n *FeishuNotifier) sendTestMessage() error {
+	msg := types.NotifyMessage{
+		MsgType: "interactive",
+		Content: map[string]interface{}{
+			"config": map[string]interface{}{
+				"wide_screen_mode": true,
+			},
+			"elements": []map[string]interface{}{
+				{
+					"tag": "div",
+					"text": map[string]interface{}{
+						"tag":     "lark_md",
+						"content": "**测试消息**\n服务启动时的 webhook 验证",
+					},
+				},
+			},
+			"header": map[string]interface{}{
+				"template": "blue",
+				"title": map[string]interface{}{
+					"content": "🔔 通知服务测试",
+					"tag":     "plain_text",
+				},
+			},
+		},
+	}
+	return n.sendMessage(msg)
+}
