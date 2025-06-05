@@ -126,7 +126,13 @@ func (n *Notifier) sendMessage(msg Message) error {
 	if err != nil {
 		return fmt.Errorf("send message failed: %v", err)
 	}
-	defer resp.Body.Close()
+
+	// 确保响应体被关闭
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			n.logger.Error("关闭响应体失败", zap.Error(closeErr))
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("send message failed with status code: %d", resp.StatusCode)
