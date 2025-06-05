@@ -20,11 +20,6 @@ type Notifier struct {
 	wg         sync.WaitGroup
 }
 
-type Message struct {
-	MsgType string                 `json:"msg_type"`
-	Content map[string]interface{} `json:"content"`
-}
-
 func NewNotifier(webhookURL string, logger *zap.Logger) *Notifier {
 	return &Notifier{
 		webhookURL: webhookURL,
@@ -87,7 +82,7 @@ func (n *Notifier) handleEvent(evt types.Event) error {
 }
 
 func (n *Notifier) SendLoginNotification(username, ip string, loginTime time.Time, serverInfo *types.ServerInfo) error {
-	msg := Message{
+	msg := types.NotifyMessage{
 		MsgType: "text",
 		Content: map[string]interface{}{
 			"text": fmt.Sprintf("用户登录通知\n服务器：%s\n服务器IP：%s\n用户名：%s\nIP地址：%s\n登录时间：%s",
@@ -102,7 +97,7 @@ func (n *Notifier) SendLoginNotification(username, ip string, loginTime time.Tim
 }
 
 func (n *Notifier) SendLogoutNotification(username, ip string, logoutTime time.Time, serverInfo *types.ServerInfo) error {
-	msg := Message{
+	msg := types.NotifyMessage{
 		MsgType: "text",
 		Content: map[string]interface{}{
 			"text": fmt.Sprintf("用户登出通知\n服务器：%s\n服务器IP：%s\n用户名：%s\nIP地址：%s\n登出时间：%s",
@@ -116,7 +111,7 @@ func (n *Notifier) SendLogoutNotification(username, ip string, logoutTime time.T
 	return n.sendMessage(msg)
 }
 
-func (n *Notifier) sendMessage(msg Message) error {
+func (n *Notifier) sendMessage(msg types.NotifyMessage) error {
 	payload, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("marshal message failed: %v", err)
