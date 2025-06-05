@@ -260,7 +260,12 @@ func (m *Monitor) Start() error {
 	if err != nil {
 		return fmt.Errorf("无法打开日志文件 %s: %v", m.logFile, err)
 	}
-	file.Close()
+	if err := file.Close(); err != nil {
+		m.logger.Error("关闭日志文件失败",
+			zap.String("file", m.logFile),
+			zap.Error(err),
+		)
+	}
 
 	// 获取服务器信息
 	serverInfo, err := getServerInfo()
