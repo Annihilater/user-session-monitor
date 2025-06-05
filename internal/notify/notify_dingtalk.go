@@ -34,29 +34,6 @@ func NewDingTalkNotifier(webhookURL string, secret string, logger *zap.Logger) *
 	}
 }
 
-// Start 启动钉钉通知器
-func (n *DingTalkNotifier) Start(eventChan <-chan types.Event) {
-	go func() {
-		for {
-			select {
-			case <-n.stopChan:
-				return
-			case evt := <-eventChan:
-				switch evt.Type {
-				case types.TypeLogin:
-					if err := n.SendLoginNotification(evt.Username, evt.IP, evt.Timestamp, evt.ServerInfo); err != nil {
-						n.logger.Error("发送登录通知失败", zap.Error(err))
-					}
-				case types.TypeLogout:
-					if err := n.SendLogoutNotification(evt.Username, evt.IP, evt.Timestamp, evt.ServerInfo); err != nil {
-						n.logger.Error("发送登出通知失败", zap.Error(err))
-					}
-				}
-			}
-		}
-	}()
-}
-
 // SendLoginNotification 发送登录通知
 func (n *DingTalkNotifier) SendLoginNotification(username, ip string, loginTime time.Time, serverInfo *types.ServerInfo) error {
 	title := "⚠️ 用户登录通知"
