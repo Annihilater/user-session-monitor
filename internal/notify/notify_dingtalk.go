@@ -27,7 +27,7 @@ type DingTalkNotifier struct {
 // NewDingTalkNotifier 创建新的钉钉通知器
 func NewDingTalkNotifier(webhookURL string, secret string, logger *zap.Logger) *DingTalkNotifier {
 	return &DingTalkNotifier{
-		BaseNotifier: NewBaseNotifier(),
+		BaseNotifier: NewBaseNotifier("钉钉", "DingTalk"),
 		webhookURL:   webhookURL,
 		secret:       secret,
 		logger:       logger,
