@@ -513,8 +513,9 @@ func start() error {
 	// 初始化通知服务
 	notifyService := notify.NewNotifyManager(logger)
 	if err := notifyService.InitNotifiers(); err != nil {
-		logger.Error("初始化通知器失败", zap.Error(err))
-		return fmt.Errorf("初始化通知器失败: %v", err)
+		logger.Warn("初始化通知器失败，但程序将继续运行", zap.Error(err))
+	} else {
+		logger.Info("通知器初始化成功")
 	}
 	currentNotifier = notifyService
 
